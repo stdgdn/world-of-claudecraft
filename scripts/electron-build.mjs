@@ -39,7 +39,7 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const electronBuilderCommand =
   process.platform === 'win32' ? 'electron-builder.cmd' : 'electron-builder';
-const defaultOrigin = 'https://worldofclaudecraft.com';
+const defaultOrigin = 'http://localhost:8787';
 // Resolve the web origins ONCE: apiOrigin feeds both the Vite client build and
 // the wocDesktop stamp below (so the packaged main process always agrees with
 // what the bundle was baked with); loginOrigin is stamped for the main process
