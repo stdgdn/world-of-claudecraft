@@ -6074,7 +6074,7 @@ export const zh_CN: EnTranslations = {
     }
   },
   "seo": {
-    "title": "World of ClaudeCraft：经典风格网页 MMO",
+    "title": "北伐的召唤",
     "description": "在 World of ClaudeCraft 展开史诗冒险。这是一款可直接在浏览器中游玩的经典风格微型 MMO。加入持续共享的世界，提升职业等级，击败敌人！",
     "genre": "MMORPG",
     "playMode": "多人游戏",

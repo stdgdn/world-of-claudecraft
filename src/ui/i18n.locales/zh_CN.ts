@@ -1428,7 +1428,7 @@ export const zh_CN: Partial<Record<TranslationKey, string>> = {
   'controls.emoteWheel': '按住表情轮盘',
   'controls.friends': '好友与公会',
   'controls.chat': '打开聊天框',
-  'seo.title': 'World of ClaudeCraft：经典风格网页 MMO',
+  'seo.title': '北伐的召唤',
   'seo.description':
     '在 World of ClaudeCraft 展开史诗冒险。这是一款可直接在浏览器中游玩的经典风格微型 MMO。加入持续共享的世界，提升职业等级，击败敌人！',
   'seo.genre': 'MMORPG',
