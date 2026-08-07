@@ -353,6 +353,117 @@ export function planImpact(
 //   re-hits share a flat ACCENT_CAP per rolling second (admitAccent) and never
 //   consume a cast slot, so a normal rotation of casts + its own hits + autos
 //   stays tier 0 indefinitely.
+// The persistent stunned-star tell: any worn `kind: 'stun'` aura circles a
+// star band over the victim's head for the aura's whole life. Keyed off the
+// aura KIND, never the spec table, so every stun source (player abilities,
+// mob stomps, traps) reads without authoring a spec. The sequencer's
+// cast-moment ccStars band shares these constants and the same time base and
+// STANDS DOWN for any victim whose band actually WINS a draw slot this frame
+// (heldStunStars on the SequencerHost seam): never a double draw, never a dip
+// where the cast band's fade-out tail hides the held band's full alpha, and
+// never a capped-out victim left with no overhead read at all. A stun is
+// actionable information (the PvP "why can't I act"
+// read), so the painter feeds it outside the cast budget, no quality tier
+// sheds it, and the alpha floor keeps it readable for the stun's whole life
+// (the fade above the floor stays as the duration read).
+//
+// Scope note: 'stun' is deliberately the only aura kind here, and that is a
+// scope choice, NOT a claim that the other cannot-act kinds are covered.
+// 'polymorph' genuinely is (the sheep rig keys off the kind, so both its
+// sources read), and both 'stasis' ids carry a read (ice_block's shell,
+// temporal_hourglass's own visual). 'incapacitate' is NOT: that hourglass
+// read is keyed to the aura ID 'temporal_hourglass', so the other nine
+// incapacitate ids (Gouge, Sap, Blind, Fear, Hibernate, Wyvern Sting,
+// Startle Shot, Death Coil, Dragon's Breath) wear nothing persistent.
+// Giving them a band is a separate design call, not an oversight to patch
+// here: they are break-on-damage CC, and a tell that says "hit me and this
+// ends" is a different read from a hard stun's "nothing you do matters".
+export const STUN_STAR_COUNT = 4;
+export const STUN_STAR_RADIUS = 0.45;
+export const STUN_STAR_LIFT = 0.55;
+export const STUN_STAR_RATE = 2.4;
+export const STUN_STAR_SIZE = 0.2;
+export const STUN_STAR_BRIGHTNESS = 2.2;
+// One classic dizzy-stars yellow for EVERY stun source, deliberately not the
+// ability's accent: a tell reads fastest when it looks identical no matter
+// what applied it (low blue channel so the overbright additive draw clamps
+// toward pure yellow, never washes to white).
+export const STUN_STAR_COLOR = 0xffd700;
+export const STUN_STAR_ALPHA_FLOOR = 0.35;
+// The overlay point cloud is one shared hard-capped batch (128 sprites for
+// EVERY windup orb, orbit band, bolt head, and sequencer transient in the
+// scene), so the held bands are bounded too: the fx engine draws the N
+// best-ranked stunned entities and no more. 8 bands = 32 sprites, a quarter
+// of the batch, so a raid-wide mass stun can never starve the other
+// actionable reads (enemy windup telegraphs, worn-debuff bands) that draw
+// after it. A band that loses its slot is not silently dark: the sequencer's
+// cast-moment ccStars stand down only for entities that actually WON a slot
+// this frame, so a dropped band still reads through the cast-moment burst
+// while one is running.
+export const MAX_STUN_STAR_BANDS = 8;
+
+// Bands behind the camera sort after every band in front of it, so an
+// on-screen victim can never lose its slot to one nobody can see. This
+// matters for fairness, not just polish: character self-culling is only
+// enabled on the tier that casts no sun shadow (GFX.dynamicShadows ->
+// cullCharacters), so on medium and above EVERY stunned entity in interest
+// range is fed, behind-camera ones included, while on low the offscreen
+// non-actionable ones are slept before they ever compete. Ranking purely by
+// camera distance would therefore let a medium-tier player lose an on-screen
+// stun read that a low-tier player would keep, which is a preset conferring
+// a disadvantage. The penalty exceeds any squared distance the world can
+// produce (interest radius is ~120 yd, so dist2 tops out near 1.4e4).
+export const STUN_BAND_BEHIND_CAMERA_PENALTY = 1e9;
+export function stunBandRankKey(dist2: number, inFront: boolean): number {
+  return inFront ? dist2 : dist2 + STUN_BAND_BEHIND_CAMERA_PENALTY;
+}
+
+// Insert one candidate into a caller-owned fixed-capacity buffer kept
+// ascending by rank key, dropping the worst entry once full. Returns the new
+// count. Allocation-free and Three-free so the per-frame selection is a plain
+// unit test; `ids` and `keys` are parallel and both at least `max` long.
+export function insertStunBandPick(
+  ids: number[],
+  keys: number[],
+  count: number,
+  id: number,
+  key: number,
+  max: number,
+): number {
+  if (max <= 0) return 0;
+  if (count >= max && key >= keys[max - 1]) return count;
+  let i = Math.min(count, max - 1);
+  while (i > 0 && keys[i - 1] > key) {
+    ids[i] = ids[i - 1];
+    keys[i] = keys[i - 1];
+    i--;
+  }
+  ids[i] = id;
+  keys[i] = key;
+  return count < max ? count + 1 : count;
+}
+
+// Index of the worn stun aura with the longest remaining time, -1 when none
+// is live. Index rather than the record so the per-frame scan allocates
+// nothing. remaining is optional on the slice (mirrored auras always carry
+// it); a stun with none counts as 1s so it still reads, and a stun at
+// remaining 0 is already expiring and never picked.
+export function wornStunIndex(auras: readonly { kind?: string; remaining?: number }[]): number {
+  let best = 0;
+  let index = -1;
+  for (let i = 0; i < auras.length; i++) {
+    const a = auras[i];
+    if (a.kind === 'stun') {
+      const rem = a.remaining ?? 1;
+      if (rem > best) {
+        best = rem;
+        index = i;
+      }
+    }
+  }
+  return index;
+}
+
 // Fixed-size ring buffers of timestamps: zero allocation in steady state (one
 // small window object is allocated the first time a caster is seen, then
 // reused; stale casters are pruned in place once the map grows).

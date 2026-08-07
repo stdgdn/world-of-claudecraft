@@ -248,7 +248,13 @@ function countByGuildKey(slots: BankSlot[]): Map<string, { slot: BankSlot; count
 // guildBankInfoFor snapshots. Empty means refused / no-op (nothing to record,
 // nothing dirty). A successful op always has non-null snapshots on both sides
 // (the op itself requires the banker, rank, and book the read gates on), so a
-// null on either side is a refusal by construction. A refused (projected)
+// null on either side is a refusal by construction. Since the v0.35 member
+// read-only view the CONVERSE no longer holds: a plain member's dispatched op
+// arrives here with two non-null, IDENTICAL snapshots (the read is
+// membership-gated, the op refused rank-side and mutated nothing), so the
+// refusal signal for that class is "no movement", not a null snapshot; the
+// identical-snapshot arms below and the rank sweep in tests/guild_bank.test.ts
+// pin it. A refused (projected)
 // slot's key is stable across the pair: the pipe policy refuses it in both
 // directions, so it can never move, and equal payloads project identically.
 export function diffGuildBankOp(

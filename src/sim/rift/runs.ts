@@ -142,17 +142,24 @@ function floorForInstance(inst: RiftInstance, floorIndex = inst.floorIndex) {
   return generateRiftFloor(inst.seed, inst.baseLevel, floorIndex, inst.upgrade);
 }
 
+/** Is `pos` inside the detection region of the floor anchored at `origin`? Floors are
+ * z-stacked far enough apart (RIFT_FLOOR_SPACING in ../data) that these regions never
+ * overlap, so a position belongs to at most one floor of one slot. This converges the
+ * copies inside THIS module; two more of the same predicate live outside it
+ * (spirit.ts ghostGraveyard's rift arm, colliders.ts riftRegionAt), which would want
+ * this hoisted beside riftInstanceOrigin in ../data to converge as well. */
+function inRiftFloorRegion(pos: { x: number; z: number }, origin: { x: number; z: number }) {
+  return (
+    Math.abs(pos.x - origin.x) <= RIFT_REGION_HALF_X &&
+    Math.abs(pos.z - origin.z) <= RIFT_REGION_HALF_Z
+  );
+}
+
 /** The rift instance whose region contains `pos`, or null. */
 export function riftInstanceAtPos(ctx: SimContext, pos: Vec3): RiftInstance | null {
   for (const inst of ctx.riftInstances) {
     if (inst.partyKey === null) continue;
-    const o = riftInstanceOrigin(inst.slot, inst.floorIndex);
-    if (
-      Math.abs(pos.x - o.x) <= RIFT_REGION_HALF_X &&
-      Math.abs(pos.z - o.z) <= RIFT_REGION_HALF_Z
-    ) {
-      return inst;
-    }
+    if (inRiftFloorRegion(pos, riftInstanceOrigin(inst.slot, inst.floorIndex))) return inst;
   }
   return null;
 }
@@ -762,6 +769,9 @@ export function descendRift(ctx: SimContext, pid?: number): void {
   // Collect everyone currently standing in this floor's region before we tear it
   // down, so the whole party descends together.
   const descenders = instancePlayerIds(ctx, inst);
+  // The floor we are about to abandon, captured BEFORE floorIndex advances: it is
+  // what decides which corpses belong to it (see the corpse sweep below).
+  const oldOrigin = riftInstanceOrigin(inst.slot, inst.floorIndex);
 
   freeRiftFloorEntities(ctx, inst);
   inst.floorIndex += 1;
@@ -770,13 +780,42 @@ export function descendRift(ctx: SimContext, pid?: number): void {
   // The next floor has its own z-stacked origin: teleport descenders THERE.
   const newOrigin = riftInstanceOrigin(inst.slot, inst.floorIndex);
   const floor = floorForInstance(inst);
+  // One arrival point for the whole descent (groundPos is a pure function of the seed
+  // and x/z, drawing no rng, so hoisting it moves no draw order). Every assignment
+  // below spread-CLONES it: handing the same Vec3 to several entities would alias
+  // one position across the party and a corpse.
+  const entryPos = ctx.groundPos(newOrigin.x + floor.entry.x, newOrigin.z + floor.entry.z);
+
+  // A corpse left on the floor we just tore down comes FORWARD with the run.
+  // Otherwise it is orphaned a floor behind in a region that now holds no live
+  // instance (no beacon, no exit), while enterRift lands its returning ghost on the
+  // CURRENT floor, far outside CORPSE_REZ_RANGE: the corpse run enterRift's
+  // dead-entry arm exists to serve becomes unreachable through no fault of the
+  // player. Swept over the run's whole roster, not just the descenders, because the
+  // member this strands is precisely the one NOT standing in the region: a released
+  // spirit waits at an overworld graveyard (the rift arm of spirit.ts ghostGraveyard)
+  // while their body stays behind. An UNRELEASED body needs nothing here; it rides
+  // the descent as an ordinary descender and stamps its corpse on arrival.
+  //
+  // Two orphan routes this deliberately does NOT cover, because they are reached
+  // without a descent and want their own fix: a member who LOGGED OUT while dead has
+  // no live entity to sweep (their corpsePos persists and reloads onto the abandoned
+  // floor), and a run that ends by expiry or a lost race tears down without moving
+  // anything. Both leave the same stranded corpse this sweep exists to prevent.
+  for (const id of inst.memberIds) {
+    const member = ctx.entities.get(id);
+    if (!member?.corpsePos) continue;
+    if (!inRiftFloorRegion(member.corpsePos, oldOrigin)) continue;
+    member.corpsePos = { ...entryPos };
+  }
+
   for (const id of descenders) {
     const e = ctx.entities.get(id);
     if (!e) continue;
     // Same every-teleport teardown as the entry above: a descender can be
     // mid-cast at the moment the floor advances under the whole party.
     cancelProfessionSessionOnDisplacement(ctx, e);
-    e.pos = ctx.groundPos(newOrigin.x + floor.entry.x, newOrigin.z + floor.entry.z);
+    e.pos = { ...entryPos };
     e.prevPos = { ...e.pos };
     ctx.rebucket(e);
     e.facing = 0;
@@ -837,10 +876,7 @@ function forceExitRiftPlayer(
   const p = ctx.entities.get(pid);
   if (!p) return;
   const origin = riftInstanceOrigin(inst.slot, inst.floorIndex);
-  const isInside =
-    Math.abs(p.pos.x - origin.x) <= RIFT_REGION_HALF_X &&
-    Math.abs(p.pos.z - origin.z) <= RIFT_REGION_HALF_Z;
-  if (!isInside && forced) return;
+  if (!inRiftFloorRegion(p.pos, origin) && forced) return;
   const dest = inst.returnPos;
   // Walk-in grace so the overworld portal cannot re-swallow the player the
   // tick they land next to it (clicking it deliberately still re-enters).
@@ -1311,6 +1347,22 @@ function completeLosingRun(ctx: SimContext, inst: RiftInstance): void {
   }
 }
 
+/** Book of Deeds credit for a completed Rift run (the floor boss is dead),
+ * regardless of the first-clear race outcome: a race loser still genuinely
+ * cleared their own instance, and rule 6 (docs/design/deeds.md) counts
+ * outcomes, not race placement. S-rank credit reads the rank the descriptor's
+ * baseLevel actually encodes (riftRankForBaseLevel), not inst.tier, which is
+ * null for dev portals that can still open at an S baseLevel. */
+function creditRiftClearDeeds(ctx: SimContext, inst: RiftInstance, participants: number[]): void {
+  const sRank = riftRankForBaseLevel(inst.baseLevel) === 'S';
+  for (const pid of participants) {
+    const meta = ctx.players.get(pid);
+    if (!meta) continue;
+    ctx.bumpDeedStat(meta, 'riftClears', 1);
+    if (sRank) ctx.bumpDeedStat(meta, 'riftSRankClears', 1);
+  }
+}
+
 /** Resolve the authoritative first-clear claim. Every finishing instance stays
  * open for loot and egress; losing the race only forfeits the first-clear
  * extras, never the run. Returns true when this run is decided and should get
@@ -1319,6 +1371,7 @@ function completeRiftClear(ctx: SimContext, inst: RiftInstance, boss: Entity | n
   if (inst.rewarded) return inst.outcome !== 'active';
   const present = instancePlayerIds(ctx, inst);
   const participants = present.length > 0 ? present : [...inst.memberIds];
+  creditRiftClearDeeds(ctx, inst, participants);
   const claim = claimRiftFirstClear(ctx, inst, participants);
   if (!claim.won) {
     completeLosingRun(ctx, inst);
@@ -1453,13 +1506,7 @@ export function instancePlayerIds(ctx: SimContext, inst: RiftInstance): number[]
       : new Set([...ctx.players.values()].map((m) => m.entityId));
   for (const pid of candidates) {
     const e = ctx.entities.get(pid);
-    if (
-      e &&
-      Math.abs(e.pos.x - origin.x) <= RIFT_REGION_HALF_X &&
-      Math.abs(e.pos.z - origin.z) <= RIFT_REGION_HALF_Z
-    ) {
-      out.push(pid);
-    }
+    if (e && inRiftFloorRegion(e.pos, origin)) out.push(pid);
   }
   return out;
 }

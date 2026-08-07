@@ -15,8 +15,8 @@
     {
       "tick": 0,
       "time": 0,
-      "nextId": 946,
-      "state": "9a7ebc25",
+      "nextId": 964,
+      "state": "e836976c",
       "events": "741638a5",
       "rng": {
         "draws": 0,
@@ -37,11 +37,11 @@
             null
           ],
           "bank": {},
+          "bgRating": 1500,
           "cls": "warrior",
           "companionUpgrades": {},
           "counters": {},
           "craftSkills": {},
-          "craftThrottle": {},
           "deedStats": {
             "counters": {},
             "dungeonClears": {},
@@ -54,7 +54,7 @@
           },
           "delveClears": {},
           "delveDaily": {},
-          "entityId": 941,
+          "entityId": 959,
           "equipment": {
             "chest": "recruit_tunic",
             "mainhand": "worn_sword",
@@ -90,7 +90,7 @@
               "name": "Battle Stance",
               "remaining": 3600,
               "school": "physical",
-              "sourceId": 941
+              "sourceId": 959
             }
           ],
           "blockChance": 0.05,
@@ -103,7 +103,7 @@
           "fallStartY": 1.5,
           "fiveSecondRule": 99,
           "hp": 100,
-          "id": 941,
+          "id": 959,
           "kind": "player",
           "level": 1,
           "lootFfaTimer": "Infinity",
@@ -147,9 +147,9 @@
     {
       "tick": 5,
       "time": 0.25,
-      "nextId": 955,
-      "state": "1eb9e619",
-      "events": "9153b4e5",
+      "nextId": 973,
+      "state": "0435743b",
+      "events": "e425f1b4",
       "rng": {
         "draws": 5,
         "digest": "59be7c21"
@@ -158,8 +158,8 @@
     {
       "tick": 10,
       "time": 0.5,
-      "nextId": 955,
-      "state": "af724e6c",
+      "nextId": 973,
+      "state": "490bddfc",
       "events": "741638a5",
       "rng": {
         "draws": 5,
@@ -169,8 +169,8 @@
     {
       "tick": 15,
       "time": 0.75,
-      "nextId": 955,
-      "state": "61705d21",
+      "nextId": 973,
+      "state": "390da873",
       "events": "741638a5",
       "rng": {
         "draws": 5,
@@ -180,9 +180,9 @@
     {
       "tick": 20,
       "time": 1,
-      "nextId": 955,
-      "state": "54a3ee82",
-      "events": "5c135d1d",
+      "nextId": 973,
+      "state": "92ac511e",
+      "events": "cc147418",
       "rng": {
         "draws": 5,
         "digest": "59be7c21"
@@ -191,8 +191,8 @@
     {
       "tick": 25,
       "time": 1.25,
-      "nextId": 955,
-      "state": "b5dfce9a",
+      "nextId": 973,
+      "state": "a767931a",
       "events": "741638a5",
       "rng": {
         "draws": 5,
@@ -202,9 +202,9 @@
     {
       "tick": 30,
       "time": 1.5,
-      "nextId": 955,
-      "state": "490a0e27",
-      "events": "244a8268",
+      "nextId": 973,
+      "state": "ac77d585",
+      "events": "bab2b6b6",
       "rng": {
         "draws": 8,
         "digest": "6d2e6d5a"
@@ -213,8 +213,8 @@
     {
       "tick": 35,
       "time": 1.75,
-      "nextId": 955,
-      "state": "a85fc14b",
+      "nextId": 973,
+      "state": "8a8ff689",
       "events": "741638a5",
       "rng": {
         "draws": 8,
@@ -224,8 +224,8 @@
     {
       "tick": 40,
       "time": 2,
-      "nextId": 955,
-      "state": "16c73243",
+      "nextId": 973,
+      "state": "be4e67a1",
       "events": "741638a5",
       "rng": {
         "draws": 8,
@@ -235,8 +235,8 @@
     {
       "tick": 40,
       "time": 2,
-      "nextId": 955,
-      "state": "16c73243",
+      "nextId": 973,
+      "state": "be4e67a1",
       "events": "741638a5",
       "rng": {
         "draws": 8,
@@ -257,13 +257,13 @@
             null
           ],
           "bank": {},
+          "bgRating": 1500,
           "cls": "warrior",
           "companionUpgrades": {
             "companion_tessa": 2
           },
           "counters": {},
           "craftSkills": {},
-          "craftThrottle": {},
           "deedStats": {
             "counters": {},
             "dungeonClears": {},
@@ -286,7 +286,7 @@
           ],
           "delveClears": {},
           "delveDaily": {},
-          "entityId": 941,
+          "entityId": 959,
           "equipment": {
             "chest": "recruit_tunic",
             "mainhand": "worn_sword",
@@ -324,7 +324,7 @@
               "name": "Battle Stance",
               "remaining": 3598,
               "school": "physical",
-              "sourceId": 941
+              "sourceId": 959
             }
           ],
           "blockChance": 0.05,
@@ -336,7 +336,7 @@
           "dodgeChance": 0.063,
           "fiveSecondRule": 101,
           "hp": 50000,
-          "id": 941,
+          "id": 959,
           "inCombat": true,
           "kind": "player",
           "level": 7,
@@ -368,7 +368,7 @@
             "sta": 35,
             "str": 35
           },
-          "targetId": 951,
+          "targetId": 969,
           "templateId": "warrior",
           "weapon": {
             "max": 5,
@@ -386,7 +386,7 @@
           "facing": -1.570796,
           "fiveSecondRule": 99,
           "hp": 119,
-          "id": 950,
+          "id": 968,
           "inCombat": true,
           "kind": "mob",
           "level": 5,
@@ -395,7 +395,7 @@
           "moveSpeed": 7,
           "onGround": true,
           "overpowerUntil": -1,
-          "ownerId": 941,
+          "ownerId": 959,
           "petMode": "defensive",
           "pos": {
             "x": 104206.85,
@@ -419,7 +419,7 @@
           }
         },
         {
-          "aggroTargetId": 950,
+          "aggroTargetId": 968,
           "aiState": "attack",
           "combatTimer": 0.55,
           "comboUntil": -1,
@@ -430,7 +430,7 @@
           "fiveSecondRule": 99,
           "hostile": true,
           "hp": 39983,
-          "id": 951,
+          "id": 969,
           "inCombat": true,
           "kind": "mob",
           "leashAnchor": {
@@ -458,11 +458,11 @@
           },
           "stompTimer": 10.2,
           "swingTimer": 0.25,
-          "tappedById": 941,
+          "tappedById": 959,
           "templateId": "deacon_varric",
           "threat": [
             [
-              950,
+              968,
               18
             ]
           ],
@@ -477,9 +477,9 @@
     {
       "tick": 41,
       "time": 2.05,
-      "nextId": 955,
-      "state": "86637594",
-      "events": "666fbf44",
+      "nextId": 973,
+      "state": "299c1ad0",
+      "events": "29f9a377",
       "rng": {
         "draws": 16,
         "digest": "d89e0835"
@@ -499,13 +499,13 @@
             null
           ],
           "bank": {},
+          "bgRating": 1500,
           "cls": "warrior",
           "companionUpgrades": {
             "companion_tessa": 2
           },
           "counters": {},
           "craftSkills": {},
-          "craftThrottle": {},
           "deedStats": {
             "counters": {},
             "dungeonClears": {},
@@ -528,7 +528,7 @@
           ],
           "delveClears": {},
           "delveDaily": {},
-          "entityId": 941,
+          "entityId": 959,
           "equipment": {
             "chest": "recruit_tunic",
             "mainhand": "worn_sword",
@@ -566,7 +566,7 @@
               "name": "Battle Stance",
               "remaining": 3597.95,
               "school": "physical",
-              "sourceId": 941
+              "sourceId": 959
             }
           ],
           "blockChance": 0.05,
@@ -576,10 +576,10 @@
           "critChance": 0.063,
           "detonateTimer": "Infinity",
           "dodgeChance": 0.063,
-          "fallStartY": 38.021352,
+          "fallStartY": 29.884403,
           "fiveSecondRule": 101.05,
           "hp": 29000,
-          "id": 941,
+          "id": 959,
           "inCombat": true,
           "kind": "player",
           "level": 7,
@@ -592,7 +592,7 @@
           "petMode": "defensive",
           "pos": {
             "x": 104209.85,
-            "y": 38.021352,
+            "y": 29.884403,
             "z": -1170
           },
           "potionCooldownUntil": -1,
@@ -611,7 +611,7 @@
             "sta": 35,
             "str": 35
           },
-          "targetId": 951,
+          "targetId": 969,
           "templateId": "warrior",
           "weapon": {
             "max": 5,
@@ -629,7 +629,7 @@
           "facing": -1.570796,
           "fiveSecondRule": 99,
           "hp": 119,
-          "id": 950,
+          "id": 968,
           "inCombat": true,
           "kind": "mob",
           "level": 5,
@@ -638,7 +638,7 @@
           "moveSpeed": 7,
           "onGround": true,
           "overpowerUntil": -1,
-          "ownerId": 941,
+          "ownerId": 959,
           "petMode": "defensive",
           "pos": {
             "x": 104206.85,
@@ -662,7 +662,7 @@
           }
         },
         {
-          "aggroTargetId": 950,
+          "aggroTargetId": 968,
           "aiState": "attack",
           "combatTimer": 0.6,
           "comboUntil": -1,
@@ -673,7 +673,7 @@
           "fiveSecondRule": 99,
           "hostile": true,
           "hp": 39983,
-          "id": 951,
+          "id": 969,
           "inCombat": true,
           "kind": "mob",
           "leashAnchor": {
@@ -701,11 +701,11 @@
           },
           "stompTimer": 10.15,
           "swingTimer": 0.2,
-          "tappedById": 941,
+          "tappedById": 959,
           "templateId": "deacon_varric",
           "threat": [
             [
-              950,
+              968,
               18
             ]
           ],
@@ -720,8 +720,8 @@
     {
       "tick": 45,
       "time": 2.25,
-      "nextId": 955,
-      "state": "b4222e19",
+      "nextId": 973,
+      "state": "270036f2",
       "events": "741638a5",
       "rng": {
         "draws": 16,
@@ -731,8 +731,8 @@
     {
       "tick": 49,
       "time": 2.45,
-      "nextId": 955,
-      "state": "3b8a169b",
+      "nextId": 973,
+      "state": "4be2dc8b",
       "events": "741638a5",
       "rng": {
         "draws": 16,
@@ -753,13 +753,13 @@
             null
           ],
           "bank": {},
+          "bgRating": 1500,
           "cls": "warrior",
           "companionUpgrades": {
             "companion_tessa": 2
           },
           "counters": {},
           "craftSkills": {},
-          "craftThrottle": {},
           "deedStats": {
             "counters": {},
             "dungeonClears": {},
@@ -782,7 +782,7 @@
           ],
           "delveClears": {},
           "delveDaily": {},
-          "entityId": 941,
+          "entityId": 959,
           "equipment": {
             "chest": "recruit_tunic",
             "mainhand": "worn_sword",
@@ -820,7 +820,7 @@
               "name": "Battle Stance",
               "remaining": 3597.55,
               "school": "physical",
-              "sourceId": 941
+              "sourceId": 959
             }
           ],
           "blockChance": 0.05,
@@ -830,10 +830,10 @@
           "critChance": 0.063,
           "detonateTimer": "Infinity",
           "dodgeChance": 0.063,
-          "fallStartY": 36.848228,
+          "fallStartY": 30.257382,
           "fiveSecondRule": 101.45,
           "hp": 29000,
-          "id": 941,
+          "id": 959,
           "kind": "player",
           "level": 7,
           "lootFfaTimer": "Infinity",
@@ -845,7 +845,7 @@
           "petMode": "defensive",
           "pos": {
             "x": 104218.85,
-            "y": 35.728228,
+            "y": 29.137382,
             "z": -1170
           },
           "potionCooldownUntil": -1,
@@ -881,7 +881,7 @@
           "facing": 1.570796,
           "fiveSecondRule": 99,
           "hp": 119,
-          "id": 950,
+          "id": 968,
           "kind": "mob",
           "level": 5,
           "lootFfaTimer": "Infinity",
@@ -889,7 +889,7 @@
           "moveSpeed": 7,
           "onGround": true,
           "overpowerUntil": -1,
-          "ownerId": 941,
+          "ownerId": 959,
           "petMode": "defensive",
           "pos": {
             "x": 104209.65,
@@ -917,8 +917,8 @@
     {
       "tick": 50,
       "time": 2.5,
-      "nextId": 955,
-      "state": "b820c77f",
+      "nextId": 973,
+      "state": "ca8e902b",
       "events": "741638a5",
       "rng": {
         "draws": 16,
@@ -928,8 +928,8 @@
     {
       "tick": 51,
       "time": 2.55,
-      "nextId": 955,
-      "state": "8ad12384",
+      "nextId": 973,
+      "state": "25be788e",
       "events": "741638a5",
       "rng": {
         "draws": 16,
@@ -950,13 +950,13 @@
             null
           ],
           "bank": {},
+          "bgRating": 1500,
           "cls": "warrior",
           "companionUpgrades": {
             "companion_tessa": 2
           },
           "counters": {},
           "craftSkills": {},
-          "craftThrottle": {},
           "deedStats": {
             "counters": {},
             "dungeonClears": {},
@@ -979,7 +979,7 @@
           ],
           "delveClears": {},
           "delveDaily": {},
-          "entityId": 941,
+          "entityId": 959,
           "equipment": {
             "chest": "recruit_tunic",
             "mainhand": "worn_sword",
@@ -1017,7 +1017,7 @@
               "name": "Battle Stance",
               "remaining": 3597.45,
               "school": "physical",
-              "sourceId": 941
+              "sourceId": 959
             }
           ],
           "blockChance": 0.05,
@@ -1027,10 +1027,10 @@
           "critChance": 0.063,
           "detonateTimer": "Infinity",
           "dodgeChance": 0.063,
-          "fallStartY": 37.762498,
+          "fallStartY": 42.029112,
           "fiveSecondRule": 101.55,
           "hp": 29000,
-          "id": 941,
+          "id": 959,
           "kind": "player",
           "level": 7,
           "lootFfaTimer": "Infinity",
@@ -1042,7 +1042,7 @@
           "petMode": "defensive",
           "pos": {
             "x": 104289.65,
-            "y": 37.722498,
+            "y": 41.989112,
             "z": -1170
           },
           "potionCooldownUntil": -1,
@@ -1078,7 +1078,7 @@
           "facing": 1.570796,
           "fiveSecondRule": 99,
           "hp": 119,
-          "id": 950,
+          "id": 968,
           "kind": "mob",
           "level": 5,
           "lootFfaTimer": "Infinity",
@@ -1086,11 +1086,11 @@
           "moveSpeed": 7,
           "onGround": true,
           "overpowerUntil": -1,
-          "ownerId": 941,
+          "ownerId": 959,
           "petMode": "defensive",
           "pos": {
             "x": 104289.65,
-            "y": 37.762498,
+            "y": 42.029112,
             "z": -1170
           },
           "potionCooldownUntil": -1,
@@ -1115,8 +1115,8 @@
     {
       "tick": 51,
       "time": 2.55,
-      "nextId": 955,
-      "state": "8ad12384",
+      "nextId": 973,
+      "state": "25be788e",
       "events": "741638a5",
       "rng": {
         "draws": 16,
@@ -1137,13 +1137,13 @@
             null
           ],
           "bank": {},
+          "bgRating": 1500,
           "cls": "warrior",
           "companionUpgrades": {
             "companion_tessa": 2
           },
           "counters": {},
           "craftSkills": {},
-          "craftThrottle": {},
           "deedStats": {
             "counters": {},
             "dungeonClears": {},
@@ -1166,7 +1166,7 @@
           ],
           "delveClears": {},
           "delveDaily": {},
-          "entityId": 941,
+          "entityId": 959,
           "equipment": {
             "chest": "recruit_tunic",
             "mainhand": "worn_sword",
@@ -1204,7 +1204,7 @@
               "name": "Battle Stance",
               "remaining": 3597.45,
               "school": "physical",
-              "sourceId": 941
+              "sourceId": 959
             }
           ],
           "blockChance": 0.05,
@@ -1214,10 +1214,10 @@
           "critChance": 0.063,
           "detonateTimer": "Infinity",
           "dodgeChance": 0.063,
-          "fallStartY": 37.762498,
+          "fallStartY": 42.029112,
           "fiveSecondRule": 101.55,
           "hp": 29000,
-          "id": 941,
+          "id": 959,
           "kind": "player",
           "level": 7,
           "lootFfaTimer": "Infinity",
@@ -1229,7 +1229,7 @@
           "petMode": "defensive",
           "pos": {
             "x": 104289.65,
-            "y": 37.722498,
+            "y": 41.989112,
             "z": -1170
           },
           "potionCooldownUntil": -1,
@@ -1265,7 +1265,7 @@
           "facing": 1.570796,
           "fiveSecondRule": 99,
           "hp": 119,
-          "id": 950,
+          "id": 968,
           "kind": "mob",
           "level": 5,
           "lootFfaTimer": "Infinity",
@@ -1273,11 +1273,11 @@
           "moveSpeed": 7,
           "onGround": true,
           "overpowerUntil": -1,
-          "ownerId": 941,
+          "ownerId": 959,
           "petMode": "defensive",
           "pos": {
             "x": 104289.65,
-            "y": 37.762498,
+            "y": 42.029112,
             "z": -1170
           },
           "potionCooldownUntil": -1,

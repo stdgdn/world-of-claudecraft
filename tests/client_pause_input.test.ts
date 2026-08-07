@@ -49,12 +49,14 @@ describe('ClientWorld neutralizeInputForClientPause', () => {
       strafeLeft: false,
       strafeRight: false,
       jump: false,
+      dive: false,
+      surface: false,
     });
     expect(sent).toHaveLength(1);
     expect(JSON.parse(sent[0])).toEqual({
       t: 'input',
       seq: 5,
-      mi: { f: 0, b: 0, tl: 0, tr: 0, sl: 0, sr: 0, j: 0 },
+      mi: { f: 0, b: 0, tl: 0, tr: 0, sl: 0, sr: 0, j: 0, dv: 0, sf: 0 },
     });
   });
 });

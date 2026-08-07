@@ -71,6 +71,7 @@ function makeHost() {
     timeNow: () => 0,
     countPrimitive: () => {},
     shakeAt: () => {},
+    heldStunStars: () => false,
   };
   return { host, rings, bursts, flips, slashes, lights };
 }

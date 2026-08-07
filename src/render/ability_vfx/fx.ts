@@ -3,6 +3,17 @@ import {
   type AbilityVfxBuffSpec,
   type AbilityVfxFullSpec,
   abilityHexColor,
+  insertStunBandPick,
+  MAX_STUN_STAR_BANDS,
+  STUN_STAR_ALPHA_FLOOR,
+  STUN_STAR_BRIGHTNESS,
+  STUN_STAR_COLOR,
+  STUN_STAR_COUNT,
+  STUN_STAR_LIFT,
+  STUN_STAR_RADIUS,
+  STUN_STAR_RATE,
+  STUN_STAR_SIZE,
+  stunBandRankKey,
 } from '../ability_vfx_core';
 import type { AbilityAudioKind, AbilityAudioOpts } from '../audio_sink';
 import { type DecalStyle, GroundDecals } from './decals';
@@ -16,7 +27,12 @@ import { ShockRings } from './rings';
 import { ArchetypeSequencer, type SequencerHost } from './sequencer';
 import { BuffShells } from './shells';
 import { isCrescendoArchetype, SPECTACLE } from './spectacle';
-import { asSpiritPath, SpiritApparitions, type SpiritAtKind } from './spirits';
+import {
+  asSpiritPath,
+  SpiritApparitions,
+  type SpiritAtKind,
+  type SpiritBuildScheduler,
+} from './spirits';
 
 export type { DecalStyle } from './decals';
 
@@ -35,6 +51,7 @@ export type ParticleBurst = (
 
 const camPosScratch = new THREE.Vector3();
 const camRightScratch = new THREE.Vector3();
+const camFwdScratch = new THREE.Vector3();
 
 // The Three-side engine of the per-ability VFX system: owns the pooled
 // primitive families ported from the Ability VFX Gallery (ribbon trails, shock
@@ -294,6 +311,19 @@ export class AbilityVfxFx implements SequencerHost {
   private windups = new Map<number, WindupState>();
   private orbits = new Map<number, OrbitBand[]>();
   private orbitBandCount = 0;
+  // Persistent stunned-star bands (holdStunStars), one entry per stunned
+  // entity, frame-stamp swept exactly like windups/orbits. Drawn for at most
+  // the MAX_STUN_STAR_BANDS best-ranked entities per frame (the fixed pick
+  // arrays are the selection scratch, reused every frame). hx/hy/hz cache the
+  // frame's resolved head anchor so the draw never re-resolves it (the
+  // renderer's anchor delegate allocates a Vector3 per call).
+  private stunStars = new Map<
+    number,
+    { remaining: number; stamp: number; hx: number; hy: number; hz: number }
+  >();
+  private stunPickIds: number[] = new Array(MAX_STUN_STAR_BANDS).fill(0);
+  private stunPickKeys: number[] = new Array(MAX_STUN_STAR_BANDS).fill(0);
+  private stunPickCount = 0;
   private time = 0;
   private frame = 0;
   private qualityLevel = 1;
@@ -405,6 +435,12 @@ export class AbilityVfxFx implements SequencerHost {
   // model is warm before its first cast - an unwarmed cast skips its spirit.
   warmSpiritsForClass(cls: string): void {
     this.spirits.warmForClass(cls);
+  }
+
+  // Hand the spirit puppets a host scheduler so their construction rides idle
+  // slots instead of the GLB resolve's own (live, in-combat) frame.
+  setSpiritBuildScheduler(schedule: SpiritBuildScheduler | null): void {
+    this.spirits.setBuildScheduler(schedule);
   }
 
   // Wired once by the painter: particle bursts ride the pooled Vfx cloud,
@@ -832,6 +868,22 @@ export class AbilityVfxFx implements SequencerHost {
     return this.anchor(id, frac);
   }
 
+  // True when the aura-driven stunned-star band actually WON a draw slot in
+  // the latest frame, which is what the sequencer's cast-moment ccStars stand
+  // down for. Membership in the pick set, deliberately not "was fed": the
+  // band count is capped, and answering on fed-ness suppressed the
+  // cast-moment band for a capped-out victim whose held band was never drawn,
+  // leaving it with no overhead read at all (worse than before this feature
+  // existed). The pick set is rebuilt at the top of every update(), before
+  // sequencer.update() consults it, so the sequencer always reads the set for
+  // the frame it is drawing.
+  heldStunStars(targetId: number): boolean {
+    for (let i = 0; i < this.stunPickCount; i++) {
+      if (this.stunPickIds[i] === targetId) return true;
+    }
+    return false;
+  }
+
   groundYAt(x: number, z: number): number {
     return this.groundY(x, z);
   }
@@ -909,6 +961,7 @@ export class AbilityVfxFx implements SequencerHost {
   // in the painter, while scarce render pools are released immediately so an
   // offscreen actor consumes no overlay, shell, ground-aura, or glow work.
   sleepEntity(entityId: number): void {
+    this.stunStars.delete(entityId);
     this.windups.delete(entityId);
     const bands = this.orbits.get(entityId);
     if (bands) {
@@ -1332,6 +1385,45 @@ export class AbilityVfxFx implements SequencerHost {
     return true;
   }
 
+  // Holds the persistent stunned-star band over the entity's head while a
+  // worn `kind: 'stun'` aura lives: the painter re-feeds it every frame from
+  // its aura scan, and the update sweep drops it the frame the feed stops
+  // (aura faded, entity left interest), so there is no teardown bookkeeping.
+  // remaining drives the fade toward the alpha floor over the stun's final
+  // second; the color is always STUN_STAR_COLOR (one uniform tell).
+  holdStunStars(entityId: number, remaining: number): void {
+    let s = this.stunStars.get(entityId);
+    if (!s) {
+      s = { remaining, stamp: this.frame, hx: 0, hy: 0, hz: 0 };
+      this.stunStars.set(entityId, s);
+      return;
+    }
+    s.remaining = remaining;
+    s.stamp = this.frame;
+  }
+
+  // One held star band (the drawOrbit sibling): STUN_STAR_COUNT sprites
+  // orbiting the head anchor the pick loop already resolved. Alpha reads the
+  // stun's remaining time but never falls below the floor while the aura
+  // lives: the fade above the floor is the duration read, the floor is the
+  // fairness rule (an active stun tell must stay readable to the last tick).
+  private drawStunStars(s: { remaining: number; hx: number; hy: number; hz: number }): void {
+    const alpha = Math.max(STUN_STAR_ALPHA_FLOOR, Math.min(1, s.remaining));
+    for (let k = 0; k < STUN_STAR_COUNT; k++) {
+      const a = this.time * STUN_STAR_RATE + (k / STUN_STAR_COUNT) * Math.PI * 2;
+      this.overlay.push(
+        s.hx + Math.cos(a) * STUN_STAR_RADIUS,
+        s.hy + STUN_STAR_LIFT,
+        s.hz + Math.sin(a) * STUN_STAR_RADIUS,
+        STUN_STAR_COLOR,
+        STUN_STAR_SIZE,
+        OVERLAY_CELL.star,
+        alpha,
+        STUN_STAR_BRIGHTNESS,
+      );
+    }
+  }
+
   // ---- frame advance ------------------------------------------------------
 
   update(dt: number): void {
@@ -1339,6 +1431,8 @@ export class AbilityVfxFx implements SequencerHost {
     this.shakeRecent = Math.max(0, this.shakeRecent - dt * 0.8);
     this.camera.getWorldPosition(camPosScratch);
     camRightScratch.set(1, 0, 0).applyQuaternion(this.camera.quaternion);
+    // camera forward, for the stun-band in-front-of-camera ranking below
+    camFwdScratch.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
     const rightLen = Math.hypot(camRightScratch.x, camRightScratch.z);
     if (rightLen > 1e-4) {
       this.camRightX = camRightScratch.x / rightLen;
@@ -1362,6 +1456,47 @@ export class AbilityVfxFx implements SequencerHost {
     this.groundAuras.update(dt, this.time, this.frame, this.anchor, this.groundY);
     this.spirits.update(dt);
     this.overlay.beginFrame();
+    // The stunned-star bands draw FIRST in the frame's overlay batch: the
+    // stun tell is actionable information, so capacity contention with the
+    // decorative sprites that follow must never be able to drop it. The band
+    // count is itself bounded (MAX_STUN_STAR_BANDS), so a raid-wide mass stun
+    // cannot starve the windup telegraphs and worn-debuff bands drawn after
+    // it, and the slots go to bands IN FRONT of the camera before any behind
+    // it (stunBandRankKey owns why that is a fairness rule, not polish).
+    // The sequencer's cast-moment ccStars stand down only for the bands that
+    // actually win a slot here, so the two are one continuous read for a
+    // drawn band, and a band the cap drops still reads through the burst.
+    let stunPicks = 0;
+    for (const [id, s] of this.stunStars) {
+      if (s.stamp !== this.frame) {
+        this.stunStars.delete(id);
+        continue;
+      }
+      const head = this.anchorOf(id, 1.0);
+      if (!head) continue;
+      s.hx = head.x;
+      s.hy = head.y;
+      s.hz = head.z;
+      const dx = head.x - camPosScratch.x;
+      const dy = head.y - camPosScratch.y;
+      const dz = head.z - camPosScratch.z;
+      const inFront = dx * camFwdScratch.x + dy * camFwdScratch.y + dz * camFwdScratch.z > 0;
+      const key = stunBandRankKey(dx * dx + dy * dy + dz * dz, inFront);
+      stunPicks = insertStunBandPick(
+        this.stunPickIds,
+        this.stunPickKeys,
+        stunPicks,
+        id,
+        key,
+        MAX_STUN_STAR_BANDS,
+      );
+    }
+    // Published BEFORE sequencer.update below, which asks heldStunStars.
+    this.stunPickCount = stunPicks;
+    for (let i = 0; i < stunPicks; i++) {
+      const s = this.stunStars.get(this.stunPickIds[i]);
+      if (s) this.drawStunStars(s);
+    }
     // styled bolt heads ride this frame's overlay batch (positions were just
     // advanced by ribbons.update above)
     this.ribbons.drawHeads(this.time, this.headSink);
@@ -1428,6 +1563,8 @@ export class AbilityVfxFx implements SequencerHost {
     this.windups.clear();
     this.orbits.clear();
     this.orbitBandCount = 0;
+    this.stunStars.clear();
+    this.stunPickCount = 0;
     for (const s of this.screenFxQueue) s.active = false;
   }
 

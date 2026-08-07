@@ -7,6 +7,46 @@
 import type { DeedLocaleTable } from '../deed_i18n';
 
 export const table: DeedLocaleTable = {
+  pvp_bg_first_capture: {
+    name: 'Vlajka v ruce',
+    desc: 'Zajmi vlajku v Thornhollowských polích.',
+  },
+  pvp_bg_first_win: {
+    name: 'Kotlina drží',
+    desc: 'Vyhraj bitvu o Thornhollowská pole.',
+  },
+  pvp_bg_wins_25: {
+    name: 'Strážce kotliny',
+    desc: 'Vyhraj 25 bitev o Thornhollowská pole.',
+    title: 'Praporečník',
+  },
+  pvp_bg_captures_100: {
+    name: 'Sto vlajek',
+    desc: 'Zajmi za celou svou kariéru 100 vlajek v Thornhollowských polích.',
+  },
+  dgn_rift: {
+    name: 'Poutník trhlinou',
+    desc: 'Vyčisti Trhlinu porážkou bosse jejího patra.',
+  },
+  dgn_rift_s_rank: {
+    name: 'Vládce trhlin',
+    desc: 'Vyčisti Trhlinu stupně S, nejtěžší úroveň, na jakou se může objevit trhlinový portál.',
+  },
+  pvp_honor_sergeant: {
+    name: 'Seržant',
+    desc: 'Získej za celý svůj život 10 000 cti. Její utrácení tě o hodnost nikdy nepřipraví.',
+    title: 'Seržant',
+  },
+  pvp_honor_knight_lieutenant: {
+    name: 'Rytíř-poručík',
+    desc: 'Získej za celý svůj život 40 000 cti, celou sezónu skutečné války za sebou.',
+    title: 'Rytíř-poručík',
+  },
+  pvp_honor_field_marshal: {
+    name: 'Polní maršál',
+    desc: 'Získej za celý svůj život 150 000 cti. Na kterémkoli realmu vzácnost, a taková i má být.',
+    title: 'Polní maršál',
+  },
   chr_drakemaw_broodlord: {
     name: 'Lamač líhně',
     desc: 'Zab Pána líhně Dračí tlamy uprostřed jeho vajec, skrz řev, sek i oheň.',
@@ -14,6 +54,54 @@ export const table: DeedLocaleTable = {
   chr_maw_matriarch: {
     name: 'Obloha zmlkla',
     desc: 'Zab Cindraleth, matriarchu Tlamy, v jejím kráterovém hnízdišti nad Dračí tlamou.',
+  },
+  chr_frostveil_gatherer: {
+    name: 'Sklizen na terasach',
+    desc: 'Vytez rudnou zilu, drevni porost a bylinny zahon ve Frostveilu.',
+  },
+  chr_frostveil_first_cast: {
+    name: 'Prvni led na plese',
+    desc: 'Chyt rybu ve vodach Frostveilu.',
+  },
+  chr_amberfall_gatherer: {
+    name: 'Sklizen Amberfallu',
+    desc: 'Vytez rudnou zilu, drevni porost a bylinny zahon v Amberfallu.',
+  },
+  chr_amberfall_first_cast: {
+    name: 'Ulovek z Velkeho morasu',
+    desc: 'Chyt rybu ve vodach Amberfallu.',
+  },
+  chr_nightbloom_gatherer: {
+    name: 'Snici sklizen',
+    desc: 'Vytez rudnou zilu, drevni porost a bylinny zahon v Nightbloomu.',
+  },
+  chr_nightbloom_first_cast: {
+    name: 'Vlna na mesicni studni',
+    desc: 'Chyt rybu ve vodach Nightbloomu.',
+  },
+  chr_wraithwood_gatherer: {
+    name: 'Sklizen pod korunami',
+    desc: 'Vytez rudnou zilu, drevni porost a bylinny zahon ve Wraithwoodu.',
+  },
+  chr_wraithwood_first_cast: {
+    name: 'Nahozeni v Zrcadlove zatoce',
+    desc: 'Chyt rybu ve vodach Wraithwoodu.',
+  },
+  chr_palmreach_gatherer: {
+    name: 'Sklizen na palmovem pobrezi',
+    desc: 'Vytez rudnou zilu, drevni porost a bylinny zahon v Palmreachi.',
+  },
+  chr_palmreach_first_cast: {
+    name: 'Nahozeni v safirove lagune',
+    desc: 'Chyt rybu ve vodach Palmreache.',
+  },
+  chr_evergarden_gatherer: {
+    name: 'Bohatstvi parteru',
+    desc: 'Vytez rudnou zilu, drevni porost a bylinny zahon v Evergardenu.',
+  },
+  chr_evergarden_first_cast: {
+    name: 'Nahozeni na okvetnim rybnice',
+    desc: 'Chyt rybu ve vodach Evergardenu.',
   },
   pvp_card_duel_first_win: {
     name: 'Vlastní pravidla',
@@ -839,5 +927,33 @@ export const table: DeedLocaleTable = {
   chr_farshore_first_cast: {
     name: 'Co vědí rackové',
     desc: 'Chyť rybu ve vodách Vzdáleného pobřeží.',
+  },
+  prog_engineering_rare: {
+    name: 'Přesné strojírenství',
+    desc: 'Vytvoř svůj první vzácný předmět ve strojírenství.',
+  },
+  prog_alchemy_rare: {
+    name: 'Vzácný ročník',
+    desc: 'Vytvoř svůj první vzácný předmět v alchymii.',
+  },
+  prog_cooking_rare: {
+    name: 'Nezapomenutelný pokrm',
+    desc: 'Vytvoř svůj první vzácný předmět ve vaření.',
+  },
+  prog_leatherworking_rare: {
+    name: 'Jemné vydělávání',
+    desc: 'Vytvoř svůj první vzácný předmět v kožedělnictví.',
+  },
+  prog_tailoring_rare: {
+    name: 'Mistrovský steh',
+    desc: 'Vytvoř svůj první vzácný předmět v krejčovství.',
+  },
+  prog_weaponcrafting_rare: {
+    name: 'Kalený k lesku',
+    desc: 'Vytvoř svůj první vzácný předmět v kovářství zbraní.',
+  },
+  prog_armorcrafting_rare: {
+    name: 'Zbroj k dokonalosti',
+    desc: 'Vytvoř svůj první vzácný předmět ve zbrojnictví.',
   },
 };

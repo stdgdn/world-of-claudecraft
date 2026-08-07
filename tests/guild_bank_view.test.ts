@@ -53,6 +53,7 @@ function guildInfo(over: Partial<GuildBankInfo> = {}): GuildBankInfo {
     capacity: 12,
     purchasedSlots: 24,
     nextExpansionPrice: GUILD_BANK_RUNG_PRICES[1],
+    canEdit: true,
     ...over,
   };
 }
@@ -178,7 +179,7 @@ describe('buildGuildBankView', () => {
     });
     const poor = buildGuildBankView(guildInfo({ treasury: price - 1 }), lookup, 0);
     if (poor.kind !== 'guild') throw new Error('expected guild');
-    expect(poor.buy.affordable).toBe(false);
+    expect(poor.buy?.affordable).toBe(false);
   });
 
   it('reports maxed once the ladder is exhausted (null price)', () => {
@@ -192,9 +193,9 @@ describe('buildGuildBankView', () => {
       0,
     );
     if (view.kind !== 'guild') throw new Error('expected guild');
-    expect(view.buy.maxed).toBe(true);
-    expect(view.buy.nextPrice).toBeNull();
-    expect(view.buy.affordable).toBe(false);
+    expect(view.buy?.maxed).toBe(true);
+    expect(view.buy?.nextPrice).toBeNull();
+    expect(view.buy?.affordable).toBe(false);
     expect(view.capacity.purchasedSlots).toBe(60);
   });
 
@@ -241,11 +242,14 @@ describe('guildBankSlotAction', () => {
   const instanced: InvSlot = { itemId: 'sword', count: 3, instance: { signer: 'Ada' } };
 
   it('withdraws whole on a plain click', () => {
-    expect(guildBankSlotAction(stack, 2, false, false)).toEqual({ kind: 'withdraw', slotIndex: 2 });
+    expect(guildBankSlotAction(stack, 2, false, false, false)).toEqual({
+      kind: 'withdraw',
+      slotIndex: 2,
+    });
   });
 
   it('opens the split prompt on shift over a splittable fungible stack', () => {
-    expect(guildBankSlotAction(stack, 1, true, false)).toEqual({
+    expect(guildBankSlotAction(stack, 1, true, false, false)).toEqual({
       kind: 'withdrawPartial',
       slotIndex: 1,
       max: 5,
@@ -253,23 +257,29 @@ describe('guildBankSlotAction', () => {
   });
 
   it('never splits a single count or an instanced stack (moves whole)', () => {
-    expect(guildBankSlotAction(single, 0, true, false)).toEqual({
+    expect(guildBankSlotAction(single, 0, true, false, false)).toEqual({
       kind: 'withdraw',
       slotIndex: 0,
     });
-    expect(guildBankSlotAction(instanced, 3, true, false)).toEqual({
+    expect(guildBankSlotAction(instanced, 3, true, false, false)).toEqual({
       kind: 'withdraw',
       slotIndex: 3,
     });
   });
 
   it('a DORMANT slot always sends the plain withdraw (round-tripping to the sim refusal), never the split prompt', () => {
-    expect(guildBankSlotAction(stack, 1, true, true)).toEqual({ kind: 'withdraw', slotIndex: 1 });
-    expect(guildBankSlotAction(stack, 1, false, true)).toEqual({ kind: 'withdraw', slotIndex: 1 });
+    expect(guildBankSlotAction(stack, 1, true, true, false)).toEqual({
+      kind: 'withdraw',
+      slotIndex: 1,
+    });
+    expect(guildBankSlotAction(stack, 1, false, true, false)).toEqual({
+      kind: 'withdraw',
+      slotIndex: 1,
+    });
   });
 
   it('an empty cell is a no-op', () => {
-    expect(guildBankSlotAction(undefined, 9, false, false)).toEqual({ kind: 'none' });
+    expect(guildBankSlotAction(undefined, 9, false, false, false)).toEqual({ kind: 'none' });
   });
 });
 
@@ -382,6 +392,35 @@ describe('ClientWorld-vs-Sim parity', () => {
     expect(cliView).toEqual(simView);
     expect(simView.kind).toBe('unopened');
   });
+
+  it('derives an identical READ-ONLY model from both shapes (canEdit false rides the wire)', () => {
+    const simInfo = guildInfo({
+      canEdit: false,
+      treasury: 60_000,
+      slots: [{ itemId: 'sword', count: 1 }],
+    });
+    const cliInfo = JSON.parse(JSON.stringify(simInfo)) as GuildBankInfo;
+    const simView = buildGuildBankView(simInfo, lookup, 0);
+    const cliView = buildGuildBankView(cliInfo, lookup, 0);
+    expect(cliView).toEqual(simView);
+    if (simView.kind !== 'guild') throw new Error('expected guild');
+    expect(simView.readOnly).toBe(true);
+    expect(simView.buy).toBeNull();
+  });
+
+  it('FAILS CLOSED on a snapshot missing canEdit (older-server rolling-deploy skew)', () => {
+    // An older server's snapshot has no canEdit field at all. The safe
+    // degradation is READ-ONLY (an officer who cannot click is annoying; a
+    // member offered ops the server refuses is wrong), so the derivation must
+    // treat absence as false, never as true.
+    const skewed = guildInfo();
+    delete (skewed as Partial<GuildBankInfo>).canEdit;
+    const view = buildGuildBankView(skewed, lookup, 0);
+    if (view.kind !== 'guild') throw new Error('expected guild');
+    expect(view.readOnly).toBe(true);
+    expect(view.treasury.canDepositGold).toBe(false);
+    expect(view.buy).toBeNull();
+  });
 });
 
 describe('the UNOPENED pane model (rung 0: purse-paid opening)', () => {
@@ -391,7 +430,7 @@ describe('the UNOPENED pane model (rung 0: purse-paid opening)', () => {
   it('reports unopened (no grid) with rung 0 as the open price', () => {
     const view = buildGuildBankView(unopened(), lookup, 0);
     if (view.kind !== 'unopened') throw new Error('expected unopened');
-    expect(view.open.price).toBe(90_000); // 9g, the rung-0 literal
+    expect(view.open?.price).toBe(90_000); // 9g, the rung-0 literal
   });
 
   it('treasury gold enablement works from day one, exactly like the opened pane', () => {
@@ -410,15 +449,15 @@ describe('the UNOPENED pane model (rung 0: purse-paid opening)', () => {
     // purse-paid.
     const poor = buildGuildBankView(unopened({ treasury: 10_000_000 }), lookup, 89_999);
     if (poor.kind !== 'unopened') throw new Error('expected unopened');
-    expect(poor.open.affordable).toBe(false);
+    expect(poor.open?.affordable).toBe(false);
     // Exactly the price affords (the sim accepts equality).
     const exact = buildGuildBankView(unopened({ treasury: 0 }), lookup, 90_000);
     if (exact.kind !== 'unopened') throw new Error('expected unopened');
-    expect(exact.open.affordable).toBe(true);
+    expect(exact.open?.affordable).toBe(true);
     // A fractional (hostile) purse floors before comparing.
     const frac = buildGuildBankView(unopened(), lookup, 89_999.9);
     if (frac.kind !== 'unopened') throw new Error('expected unopened');
-    expect(frac.open.affordable).toBe(false);
+    expect(frac.open?.affordable).toBe(false);
   });
 
   it('an opened bank never yields the unopened kind (the 24-slot boundary)', () => {
@@ -428,5 +467,57 @@ describe('the UNOPENED pane model (rung 0: purse-paid opening)', () => {
       0,
     );
     expect(opened.kind).toBe('guild');
+  });
+});
+
+describe('the READ-ONLY member view (canEdit false)', () => {
+  it('an officer-plus snapshot is not read-only; a member snapshot is', () => {
+    const officer = buildGuildBankView(guildInfo(), lookup, 0);
+    if (officer.kind !== 'guild') throw new Error('expected guild');
+    expect(officer.readOnly).toBe(false);
+    const member = buildGuildBankView(guildInfo({ canEdit: false }), lookup, 0);
+    if (member.kind !== 'guild') throw new Error('expected guild');
+    expect(member.readOnly).toBe(true);
+  });
+
+  it('withholds every mutating affordance: gold buttons off, no buy panel', () => {
+    // A treasury both depositable and withdrawable for an officer must read
+    // fully disabled for a member: the enablement carries the edit verdict,
+    // not just the snapshot bounds (per-dimension negative vs. the officer
+    // arm asserted above).
+    const view = buildGuildBankView(
+      guildInfo({ canEdit: false, treasury: 25_000, slots: [{ itemId: 'sword', count: 1 }] }),
+      lookup,
+      0,
+    );
+    if (view.kind !== 'guild') throw new Error('expected guild');
+    expect(view.treasury.canDepositGold).toBe(false);
+    expect(view.treasury.canWithdrawGold).toBe(false);
+    expect(view.buy).toBeNull();
+    // The CONTENTS still render in full: read-only means look, not blind.
+    expect(view.slots.map((s) => s.itemId)).toEqual(['sword']);
+    expect(view.capacity.total).toBe(12);
+  });
+
+  it('the unopened pane withholds the open-the-bank row (and its purse read)', () => {
+    const view = buildGuildBankView(
+      guildInfo({ canEdit: false, capacity: 0, purchasedSlots: 0, nextExpansionPrice: 90_000 }),
+      lookup,
+      10_000_000, // a rich purse must not conjure the officer-only open row
+    );
+    if (view.kind !== 'unopened') throw new Error('expected unopened');
+    expect(view.readOnly).toBe(true);
+    expect(view.open).toBeNull();
+    expect(view.treasury.canDepositGold).toBe(false);
+    expect(view.treasury.canWithdrawGold).toBe(false);
+  });
+
+  it('a read-only slot click does NOTHING: no withdraw, no split prompt', () => {
+    const stack: InvSlot = { itemId: 'potion', count: 5 };
+    expect(guildBankSlotAction(stack, 2, false, false, true)).toEqual({ kind: 'none' });
+    expect(guildBankSlotAction(stack, 2, true, false, true)).toEqual({ kind: 'none' });
+    // The dormant arm is inert too (no refusal round-trip for a viewer who
+    // was told the pane is read-only).
+    expect(guildBankSlotAction(stack, 2, false, true, true)).toEqual({ kind: 'none' });
   });
 });

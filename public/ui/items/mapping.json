@@ -2178,6 +2178,30 @@
       "sourcePack": "greaves",
       "sourceFile": "22.png",
       "confidence": "medium"
+    },
+    {
+      "itemId": "sharp_claw",
+      "name": "Sharp Claw",
+      "sourcePack": "woc_original_svg",
+      "sourceFile": "n/a (procedurally rasterized SVG, no source pack)",
+      "confidence": "high",
+      "license": "World of ClaudeCraft original art (project-owned, programmatically drawn placeholder pending a commissioned painted icon in the profession-materials style)"
+    },
+    {
+      "itemId": "curved_tusk",
+      "name": "Curved Tusk",
+      "sourcePack": "woc_original_svg",
+      "sourceFile": "n/a (procedurally rasterized SVG, no source pack)",
+      "confidence": "high",
+      "license": "World of ClaudeCraft original art (project-owned, programmatically drawn placeholder pending a commissioned painted icon in the profession-materials style)"
+    },
+    {
+      "itemId": "pristine_claw",
+      "name": "Pristine Claw",
+      "sourcePack": "woc_original_svg",
+      "sourceFile": "n/a (procedurally rasterized SVG, no source pack)",
+      "confidence": "high",
+      "license": "World of ClaudeCraft original art (project-owned, programmatically drawn placeholder pending a commissioned painted icon in the profession-materials style)"
     }
   ],
   "generatedBatches": [
@@ -7476,6 +7500,81 @@
         "restless_skull",
         "vanguard_bone"
       ]
+    },
+    {
+      "batchId": "hunter-quivers-2026-08-04",
+      "source": "OpenAI gpt-image-2 (images/generations)",
+      "license": "World of ClaudeCraft project-generated art, project asset, rights reserved",
+      "styleReference": "Calibrated against the shipped set: nighttalon_crown (\"Direfang Crown\"), cragmaw_huntcord, gravewyrm_gauntlets, moggers_stomper_boots and wraithfire_orb. Each quiver borrows the palette its own name family already ships rather than inventing one.",
+      "commonPrompt": "Premium hand-painted classic-fantasy MMORPG inventory icon of one centered object. STYLIZED PAINTED GAME ART, not a photoreal render: clean confident brushwork, bold readable shapes, strong value contrast. The object is BRIGHTLY LIT and richly SATURATED so it pops off a simple dark muted backdrop, and it FILLS ABOUT 80 PERCENT of the square with small even margins. Top-left key light with warm rim accents. Reads instantly at 28 pixels. No UI border, rarity frame, circular halo, text, watermark, character, mannequin, scenic diorama, crop, or exterior glow.\n\nThe subject is a QUIVER: an arrow container worn at the hip or back, shown upright or on a slight diagonal. The vessel is the subject; a few arrow shafts and fletchings read out of its mouth. Never a bow, never loose arrows alone, never a person.",
+      "itemIds": [
+        "moggers_hide_quiver",
+        "cragmaw_huntquiver",
+        "gravewyrm_bone_quiver",
+        "direfang_quiver",
+        "heroic_gravewyrm_bone_quiver",
+        "heroic_direfang_quiver"
+      ],
+      "itemDirections": {
+        "moggers_hide_quiver": {
+          "intendedVisualSubject": "A crude bandit quiver of warm tan and amber stitched hide over a bent frame, dark charcoal leather cap and base, a red-brown cord wrap and a plain iron ring. Rough arrows with grey goose fletching. Warm amber and charcoal palette. Humble field-made gear, lowest tier."
+        },
+        "cragmaw_huntquiver": {
+          "intendedVisualSubject": "A highland hunter quiver of rich tan hide with a band of pale fur on one flank, warm bronze and copper fittings with a carved antler toggle and braided sinew cord, matching the shipped Cragmaw Huntcord palette. Sturdy trophy-built working gear, mid tier."
+        },
+        "gravewyrm_bone_quiver": {
+          "intendedVisualSubject": "A quiver of pale ivory wyrm rib bone lashed with dark cord over amber-orange dragon scale hide, weathered steel and verdigris clasps, matching the shipped Gravewyrm Gauntlets palette. High tier, no magical glow."
+        },
+        "direfang_quiver": {
+          "intendedVisualSubject": "A masterwork quiver of deep crimson-red leather over dark plates, ornate antique-gold fittings and a fanged gold motif at the mouth, matching the shipped Direfang Crown palette. Top tier, no aura."
+        },
+        "heroic_gravewyrm_bone_quiver": {
+          "intendedVisualSubject": "A heroic reforge of the Gravewyrm bone quiver: same silhouette, bone bleached brighter, cord re-wrapped in deep crimson, clasps re-struck in bright gold, hot ember-orange light in the recesses."
+        },
+        "heroic_direfang_quiver": {
+          "intendedVisualSubject": "A heroic reforge of the Direfang quiver: same crimson-and-gold silhouette, fittings re-struck in brilliant gold-bronze, the fanged motif sharper and inlaid, a hot ember rim along the leather seams."
+        }
+      }
+    },
+    {
+      "batchId": "thornhide-garb-druid-pvp-2026-08-06",
+      "source": "OpenAI gpt-image-2 (images/generations)",
+      "license": "World of ClaudeCraft project-generated art, project asset, rights reserved",
+      "styleReference": "None. Text-to-image only: no repository or third-party image was supplied as a reference, so no external art is in the lineage of these seven icons. The house look is carried entirely by the written style language in commonPrompt, calibrated by eye against the shipped WARFARE armor sets in this directory (ashstalker_* leather and cinderweave_* caster for material and backdrop treatment, furyforged_* and stormbound_* for the per-slot composition conventions: a single head piece, a mirrored splayed shoulder pair, one front-facing chest piece, one wide horizontal belt band, one front-facing pair of leggings, a mirrored glove pair, and a side-by-side boot pair).",
+      "commonPrompt": "Premium hand-painted classic-fantasy MMORPG inventory icon of one centered piece of DRUID LEATHER armor from the Thornhide Garb set. STYLIZED PAINTED GAME ART, not a photoreal photograph and not a 3D render: clean confident brushwork, bold readable shapes, strong value contrast. The materials must read unmistakably as supple worn LEATHER and living plant matter, never woven cloth robes and never metal plate: deep forest-green and warm umber dyed hide with visible grain and stitching, small tooled bark plates, twisted briar and bramble vines, short iron-dark thorn studs, and a little pale sage-green moss caught in the seams. Warm top-left key light with a restrained cool green rim. The piece sits on an opaque near-black charcoal backdrop with a soft mossy green atmospheric haze and dark vignetted corners. The object is clearly lit so it pops off the backdrop, fills about 80 percent of the square, is centered with small even margins, and reads instantly at 28 pixels. It is empty worn gear shown alone: no body, head, hands or legs inside it. No UI border, rarity frame, circular halo, text, watermark, character, mannequin, scenic diorama, crop, glowing magical aura, or transparent background.",
+      "postProcessing": "thornhide_mantle and thornhide_leggings were each regenerated once from the same commonPrompt with the framing clause tightened (the first pass under-filled the square and lost its silhouette at 28px); the shipped file is that second generation as returned by the API. No image was retouched or composited. All seven were normalized by scripts/convert_item_icons_webp.mjs at --quality 90.",
+      "itemIds": [
+        "thornhide_headdress",
+        "thornhide_mantle",
+        "thornhide_vestment",
+        "thornhide_cinch",
+        "thornhide_leggings",
+        "thornhide_gloves",
+        "thornhide_boots"
+      ],
+      "itemDirections": {
+        "thornhide_headdress": {
+          "intendedVisualSubject": "An open-faced dark green leather cap and brow band with a pair of short curved stag antlers rising from the temples, thorned briar wound around the brow and a few small leaves. Head slot, leather, never a metal helm or a plain cloth hood."
+        },
+        "thornhide_mantle": {
+          "intendedVisualSubject": "A mirrored pair of leather shoulder pauldrons splayed left and right, each a layered deep green hide cap topped by a curved bark-plated crest, iron-dark thorn studs along the ridge, briar tendrils and pale moss in the seams. Shoulder slot, leather."
+        },
+        "thornhide_vestment": {
+          "intendedVisualSubject": "One sleeveless leather chest vestment hanging empty and front-on, supple deep green and umber hide panels cross-laced up the centre with rawhide cord, a living bramble vine growing through the lacing, small thorns and a wide turned collar. Chest slot, leather, never a flowing cloth robe or a breastplate."
+        },
+        "thornhide_cinch": {
+          "intendedVisualSubject": "One broad umber leather belt seen front-on as a wide horizontal band, its ends meeting at a large central buckle carved from a woody seed pod, with a tooled leaf pattern, thorn studs, a wrap of green vine and a little moss. Waist slot, leather."
+        },
+        "thornhide_leggings": {
+          "intendedVisualSubject": "One pair of leather leggings hanging empty and front-on with both legs together, dark green hide with warm umber knee patches, green vine cord spiralling down each shin and thorn studs over the knees. Legs slot, leather, never bare legs or plate greaves."
+        },
+        "thornhide_gloves": {
+          "intendedVisualSubject": "A mirrored pair of empty green-brown leather gloves angled inward with the knuckles forward, dark tooled bark plates over the knuckles, briar wound around the wide flared cuffs and short iron-dark thorns. Hands slot, leather."
+        },
+        "thornhide_boots": {
+          "intendedVisualSubject": "A matched pair of empty umber and deep green leather boots standing side by side in three-quarter view, wrapped with woody root and vine straps, thorn studs at the ankle and pale moss caught around the soles. Feet slot, leather."
+        }
+      }
     }
   ]
 }

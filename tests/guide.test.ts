@@ -50,8 +50,6 @@ import { FISHING_TABLES_BY_BAND } from '../src/sim/content/items';
 import {
   CRAFT_GOLD_SINK_COPPER_PER_BUDGET,
   CRAFT_RING,
-  CRAFT_THROTTLE_MAX_PER_WINDOW,
-  CRAFT_THROTTLE_WINDOW_SECONDS,
   GATHERING_PROFESSION_IDS,
   GATHERING_PROFESSIONS,
   PERK_THRESHOLDS,
@@ -107,7 +105,7 @@ import {
   WIELD_REQUIREMENT_BY_TIER,
 } from '../src/sim/professions/wield_gate';
 import { DEED_IMAGE_IDS } from '../src/ui/deed_image_ids';
-import { ensureLocaleLoaded, setLanguage, t } from '../src/ui/i18n';
+import { ensureLocaleLoaded, type SupportedLanguage, setLanguage, t } from '../src/ui/i18n';
 import { guideStrings } from '../src/ui/i18n.catalog/guide';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -1018,6 +1016,84 @@ describe('Guide deeds cross-page surfaces', () => {
     }
   });
 
+  it('never leaks a boss personal name into the dungeons page card copy', () => {
+    // Regression pin: wildheartBody once named the Wildheart Basin boss outright
+    // ("...to face Zulgar"), breaking with every sibling body's withhold-the-name
+    // idiom (sanctumBody, raidBody, sagaPeaksBody). The full-name scan the deeds
+    // page uses would have missed it (the leak was the bare personal name, not the
+    // comma-joined title), so this checks the personal name segment on its own.
+    setLanguage('en');
+    const html = dungeonsPage.render({
+      params: [],
+      sub: 'dungeons',
+      titleKey: 'guide.nav.dungeons',
+    });
+    for (const boss of Object.values(MOBS).filter((m) => m.boss)) {
+      const personalName = boss.name.split(',')[0];
+      expect(
+        html.includes(personalName),
+        `boss personal name "${personalName}" leaked into the dungeons page`,
+      ).toBe(false);
+    }
+  });
+
+  it('never leaks the Wildheart Basin boss name in a translated locale either', async () => {
+    // Follow-up regression pin (review on PR #2903): the first fix only reworded the
+    // English catalog value plus the eager en/en_CA/en_XA bundles, leaving every
+    // translated overlay still naming the boss. Drive every translated locale that
+    // carries this key, the same way a real translated visitor would
+    // (ensureLocaleLoaded before render), and check for that LOCALE's own personal-name
+    // form, not just the English "Zulgar": a second review round on this PR found the
+    // first version of this test only covered 6 of the 17 fixed overlays and compared
+    // every locale against the English name, so a translated overlay that leaked the
+    // localized form (zh_CN "祖尔加", zh_TW "祖爾加", ja_JP "ズルガー", ko_KR "줄가르",
+    // or the Cyrillic ru_RU "Зулгар") would have passed silently. The Latin-script
+    // locales below (including inflected forms like cs_CZ "Zulgarovi" and pl_PL
+    // "Zulgarowi") all still contain the "Zulgar" substring, so one shared check
+    // covers them; the four non-Latin scripts get their own literal.
+    const wildheartBoss = Object.values(MOBS).find((m) => m.id === 'wildheart_high_priest');
+    expect(wildheartBoss, 'wildheart_high_priest mob missing from content').toBeTruthy();
+    const personalName = (wildheartBoss?.name ?? '').split(',')[0];
+    expect(personalName).toBe('Zulgar');
+    const forbiddenByLocale: Partial<Record<SupportedLanguage, string>> = {
+      cs_CZ: personalName,
+      da_DK: personalName,
+      de_DE: personalName,
+      es: personalName,
+      fr_FR: personalName,
+      id_ID: personalName,
+      it_IT: personalName,
+      nl_NL: personalName,
+      pl_PL: personalName,
+      pt_BR: personalName,
+      ru_RU: 'Зулгар',
+      sv_SE: personalName,
+      tr_TR: personalName,
+      vi_VN: personalName,
+      ja_JP: 'ズルガー',
+      ko_KR: '줄가르',
+      zh_CN: '祖尔加',
+      zh_TW: '祖爾加',
+    };
+    for (const [locale, forbidden] of Object.entries(forbiddenByLocale) as [
+      SupportedLanguage,
+      string,
+    ][]) {
+      await ensureLocaleLoaded(locale);
+      setLanguage(locale);
+      const html = dungeonsPage.render({
+        params: [],
+        sub: 'dungeons',
+        titleKey: 'guide.nav.dungeons',
+      });
+      expect(
+        html.includes(forbidden),
+        `boss personal name "${forbidden}" leaked into the ${locale} dungeons page`,
+      ).toBe(false);
+    }
+    setLanguage('en');
+  });
+
   it('documents the new default binds on the controls page', () => {
     setLanguage('en');
     const html = controlsPage.render({
@@ -1040,6 +1116,35 @@ describe('Guide deeds cross-page surfaces', () => {
     expect(defaults.get('discord')).toEqual(['KeyU']);
     expect(defaults.get('petAttack')).toEqual(['Ctrl+Digit1']);
     expect(defaults.get('petAggressive')).toEqual(['Ctrl+Digit5']);
+  });
+});
+
+// Five shipped keybound features (Professions, Target Buffs and Debuffs, Dungeon Finder,
+// Mount/Dismount, Sheathe) were entirely absent from the controls reference table. Each row
+// mirrors the game's real default bind (src/game/keybinds.ts), so a changed shipped default
+// reds this test instead of silently drifting the public reference.
+describe('Guide controls reference completeness', () => {
+  it('documents Professions, Target Buffs/Debuffs, Dungeon Finder, Mount, and Sheathe', () => {
+    setLanguage('en');
+    const html = controlsPage.render({
+      params: [],
+      sub: 'reference/controls',
+      titleKey: 'guide.nav.controls',
+    });
+    expect(html).toContain('<kbd>Shift+P</kbd></td><td>Professions</td>');
+    expect(html).toContain('<kbd>Shift+J</kbd></td><td>Target buffs and debuffs</td>');
+    expect(html).toContain('<kbd>Shift+I</kbd></td><td>Dungeon Finder</td>');
+    expect(html).toContain('<kbd>`</kbd></td><td>Mount / Dismount</td>');
+    expect(html).toContain('<kbd>Z</kbd></td><td>Sheathe/Unsheathe Weapon</td>');
+  });
+
+  it('keeps those five binds in step with the game defaults', () => {
+    const defaults = new Map(BIND_ACTIONS.map((a) => [a.id, a.defaults]));
+    expect(defaults.get('professions')).toEqual(['Shift+KeyP']);
+    expect(defaults.get('targetAuras')).toEqual(['Shift+KeyJ']);
+    expect(defaults.get('dungeonFinder')).toEqual(['Shift+KeyI']);
+    expect(defaults.get('mount')).toEqual(['Backquote']);
+    expect(defaults.get('sheathe')).toEqual(['KeyZ']);
   });
 });
 
@@ -1674,7 +1779,13 @@ describe('Guide professions gathering accuracy', () => {
         d.trigger.markIds.length > 0 &&
         d.trigger.markIds.every((m) => m.startsWith('gather:')),
     );
-    const words: Record<number, string> = { 5: 'five', 6: 'six', 7: 'seven', 8: 'eight' };
+    const words: Record<number, string> = {
+      5: 'five',
+      6: 'six',
+      7: 'seven',
+      8: 'eight',
+      12: 'twelve',
+    };
     const castWord = words[firstCast.length];
     expect(castWord, `unmapped first-cast count ${firstCast.length}`).toBeDefined();
     expect(guideStrings.profPages.gatherDeeds.fishing).toContain(
@@ -1756,15 +1867,12 @@ describe('Guide professions enchanting and economy accuracy', () => {
     );
   });
 
-  it('publishes the exact fees, throttle, masterwork odds, and market cut', () => {
+  it('publishes the exact fees, masterwork odds, and market cut', () => {
     const e = GUIDE_PROF_ECONOMY;
     expect(e.craftFeeCopperPerBudgetPoint).toBe(CRAFT_GOLD_SINK_COPPER_PER_BUDGET);
     expect(e.craftFeeCopperPerBudgetPoint).toBe(2);
-    expect(e.actionThrottle).toEqual({
-      windowSeconds: CRAFT_THROTTLE_WINDOW_SECONDS,
-      maxActions: CRAFT_THROTTLE_MAX_PER_WINDOW,
-    });
-    expect(e.actionThrottle).toEqual({ windowSeconds: 60, maxActions: 10 });
+    // Craft Cast System Phase 5: shared actionThrottle removed from guide data.
+    expect('actionThrottle' in e).toBe(false);
     expect(e.marketCutPct).toBe(Math.round(MARKET_CUT * 100));
     expect(e.marketCutPct).toBe(5);
     expect(e.listingDepositCopper).toBe(MARKET_LISTING_DEPOSIT_COPPER);

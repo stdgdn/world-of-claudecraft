@@ -63,6 +63,9 @@ export interface InputCallbacks {
   // Pet-bar command (bound to Ctrl+1..5 by default): attack the current target,
   // stop (passive stance), taunt, or set the defensive/aggressive stance.
   onPet(action: 'attack' | 'stop' | 'taunt' | 'defensive' | 'aggressive'): void;
+  // Select your own pet (Ctrl+6 by default). Separate from onPet: this targets the
+  // pet rather than commanding it, so it belongs with the targeting callbacks above.
+  onTargetPet(): void;
   onAbility(slot: number): void;
   // Action-bar slot key DOWN / UP, so a slot can HOLD to charge (the Vale Cup
   // shoot) and release to fire. A tap is a down immediately followed by an up.
@@ -85,6 +88,7 @@ export interface InputCallbacks {
       | 'social'
       | 'arena'
       | 'valecup'
+      | 'bgFlag'
       | 'dungeonFinder'
       | 'leaderboard'
       | 'calendar'
@@ -99,7 +103,9 @@ export interface InputCallbacks {
   onClickPick(x: number, y: number, button: number): void;
   /** Attack-move key pressed (only fires while Attack Move mode is on); x/y is the cursor. */
   onAttackMove?(x: number, y: number): void;
-  /** When false, edge actions (spells, UI keys) are ignored. */
+  /** When false, keydown-driven actions are ignored: edge actions (spells, UI keys)
+   *  and held movement keys. Escape is handled before this gate and still reaches
+   *  onUiKey; key releases are ungated. */
   canUseGameKeys?: () => boolean;
   onInputIntent?(kind: 'move' | 'look' | 'zoom'): void;
 }
@@ -126,12 +132,42 @@ export interface InputDebugState {
     strafeLeft: boolean;
     strafeRight: boolean;
     jump: boolean;
+    dive: boolean;
+    surface: boolean;
   };
   leftDown: boolean;
   rightDown: boolean;
   cameraDragActive: boolean;
   pointerLocked: boolean;
   hoverActive: boolean;
+}
+
+// Camera-driven swimming. camPitch is POSITIVE looking DOWN (renderer.ts seats
+// the boom at eyeY + sin(pitch) * dist), clamped to [-0.4, 1.35], and RESTS at
+// 0.32 — so the bands cannot be centred on zero: a neutral camera has to mean
+// "hold this depth", or every swimmer would sink on sight. Diving needs a
+// deliberate ~17 degrees past rest, surfacing about 15 degrees back the other
+// way, leaving a wide dead band in between.
+const SWIM_LOOK_DOWN = 0.62;
+const SWIM_LOOK_UP = 0.05;
+// ...and how far PAST that threshold the view is aimed, which scales the rate:
+// ease the camera over the line and you drift down, bury it and you plunge.
+// Ends of each ramp, in camPitch radians (the clamps are the natural ends).
+const SWIM_DIVE_FULL = 1.25;
+const SWIM_SURFACE_FULL = -0.3;
+// Quantised, because the steer rides the SAME change-detected input frame as
+// the movement keys (net/online.ts inputSignature): a continuous float would
+// resend on every mouse-move, where steps resend only when the band changes.
+// Six steps is finer than the eye reads on a 3.2 yd/s descent.
+const SWIM_STEER_STEPS = 6;
+// Hysteresis on the threshold itself. Without it, a camera resting exactly on
+// the line chatters the dive bit (and its input frame) at mouse-jitter rate.
+const SWIM_LOOK_HYSTERESIS = 0.05;
+
+/** Camera pitch -> 0..1 steer, quantised, for whichever band the view is in. */
+export function swimSteerFromPitch(pitch: number, from: number, to: number): number {
+  const t = Math.min(1, Math.max(0, (pitch - from) / (to - from)));
+  return Math.round(t * SWIM_STEER_STEPS) / SWIM_STEER_STEPS;
 }
 
 export class Input {
@@ -240,6 +276,19 @@ export class Input {
     strafeRight: false,
   };
   private touchJumpUntil = 0;
+  // Swim-down held by an on-screen/controller control (the keyboard path is the
+  // 'dive' held action). Not latched like the jump tap: descending is a hold.
+  private touchDive = false;
+  // Latched sides of the camera-steer bands (see readSwimSteer): which one the
+  // view is currently inside, so the threshold can hysteresis rather than
+  // chatter when the camera rests on it.
+  private swimLookDown = false;
+  private swimLookUp = false;
+  // The pitch the SWIMMER aims along — synced from camPitch only by STEERING
+  // looks (right-drag mouselook, touch look, gamepad look, mouse-camera mode).
+  // A left-drag orbit is camera-only sightseeing and must never steer the
+  // body up or down through the water (the WoW rule).
+  private swimAimPitch = 0.32;
   private keyJumpUntil = 0;
   private touchLookActive = false;
   // True while the gamepad's right stick is deflected past its deadzone, set
@@ -249,7 +298,8 @@ export class Input {
   // mouselook do, instead of only ever orbiting the free camera.
   private gamepadLookActive = false;
   private touchLookVector = { x: 0, y: 0 };
-  // multiplier on the touch look (camera joystick) rate; setTouchLookSpeed
+  // multiplier on the touch look rate, both the camera joystick (updateTouchLook)
+  // and the default one-finger swipe-drag (applyTouchLookDelta); setTouchLookSpeed
   // drives it from the settings menu. Mouselook uses lookSensitivity instead.
   private touchLookSpeed = 1;
   // +1 normal, -1 when the player inverts the touch camera's vertical axis
@@ -458,6 +508,12 @@ export class Input {
         strafeLeft: this.heldAction('strafeLeft'),
         strafeRight: this.heldAction('strafeRight'),
         jump: this.keybinds.codesForAction('jump').some((c) => this.keys.has(comboCode(c))),
+        // Read the camera-steer bands the way the move frame does (latched
+        // thresholds, key OR camera, move-gated), so the readout cannot
+        // disagree with the input the sim is actually being given.
+        dive:
+          (this.anyMoveHeld() && this.swimLookDown) || this.heldAction('dive') || this.touchDive,
+        surface: this.anyMoveHeld() && this.swimLookUp,
       },
       leftDown: this.leftDown,
       rightDown: this.rightDown,
@@ -598,6 +654,12 @@ export class Input {
     this.touchJumpUntil = Math.max(this.touchJumpUntil, performance.now() + TOUCH_JUMP_LATCH_MS);
   }
 
+  /** Touch/controller swim-down, held for as long as the control is pressed. */
+  setTouchDive(on: boolean): void {
+    if (this.touchDive !== on) this.noteMovementIntent();
+    this.touchDive = on;
+  }
+
   // Touch-reachable autorun toggle (the keyboard path is the 'autorun' edge action).
   // Returns the new state so the on-screen button can reflect it.
   toggleAutorun(): boolean {
@@ -635,12 +697,13 @@ export class Input {
   }
 
   applyTouchLookDelta(dx: number, dy: number): void {
-    const dragSens = this.lookSensitivity * TOUCH_DRAG_SENS_MULT;
+    const dragSens = this.lookSensitivity * TOUCH_DRAG_SENS_MULT * this.touchLookSpeed;
     this.camYaw -= dx * dragSens;
     this.camPitch = Math.min(
       1.35,
       Math.max(-0.4, this.camPitch + this.touchPitchSign * dy * dragSens),
     );
+    this.swimAimPitch = this.camPitch;
     if (dx !== 0 || dy !== 0) this.noteIntent('look');
   }
 
@@ -684,6 +747,7 @@ export class Input {
     if (yawDelta === 0 && pitchDelta === 0) return;
     this.camYaw += yawDelta;
     this.camPitch = Math.min(1.35, Math.max(-0.4, this.camPitch + pitchDelta));
+    this.swimAimPitch = this.camPitch;
     this.noteIntent('look');
   }
 
@@ -710,12 +774,14 @@ export class Input {
             dt,
       ),
     );
+    this.swimAimPitch = this.camPitch;
   }
 
   /** Snap the orbit camera back behind the character (mobile recenter gesture). */
   recenterCameraBehind(facing: number): void {
     if (Number.isFinite(facing)) this.camYaw = facing;
     this.camPitch = 0.32;
+    this.swimAimPitch = 0.32;
   }
 
   isMouselookActive(): boolean {
@@ -1044,6 +1110,9 @@ export class Input {
       case 'petAggressive':
         this.cb.onPet('aggressive');
         return;
+      case 'targetPet':
+        this.cb.onTargetPet();
+        return;
       case 'interact':
         this.cb.onUiKey('interact');
         return;
@@ -1091,6 +1160,9 @@ export class Input {
         return;
       case 'valecup':
         this.cb.onUiKey('valecup');
+        return;
+      case 'bgFlag':
+        this.cb.onUiKey('bgFlag');
         return;
       case 'leaderboard':
         this.cb.onUiKey('leaderboard');
@@ -1322,6 +1394,7 @@ export class Input {
       1.35,
       Math.max(-0.4, this.camPitch + my * this.lookSensitivity * this.lookPitchSign),
     );
+    if (this.rightDown || this.mouseCameraEnabled) this.swimAimPitch = this.camPitch;
     if (mx !== 0 || my !== 0) this.noteIntent('look');
   }
 
@@ -1347,6 +1420,65 @@ export class Input {
       .some((c) => this.keys.has(comboCode(c)) && !this.isAttackMoveReservedCode(c));
   }
 
+  /**
+   * The vertical half of swimming, off the camera: whether the view is aimed
+   * into a dive or a climb, and how steeply.
+   *
+   * The thresholds latch (SWIM_LOOK_HYSTERESIS) so a view resting on the line
+   * cannot flicker the bit — and with it the netted input frame — at
+   * mouse-jitter rate. Beyond the threshold the steer ramps to 1, which is what
+   * turns the old on/off plunge into a control you can feather.
+   */
+  private readSwimSteer(moving: boolean): { dive: boolean; surface: boolean; swimSteer: number } {
+    const keyDive = this.heldAction('dive') || this.touchDive;
+    const enterDown = this.swimLookDown ? SWIM_LOOK_DOWN - SWIM_LOOK_HYSTERESIS : SWIM_LOOK_DOWN;
+    const enterUp = this.swimLookUp ? SWIM_LOOK_UP + SWIM_LOOK_HYSTERESIS : SWIM_LOOK_UP;
+    // Bands latch over swimAimPitch — the pitch STEERING looks wrote — never
+    // the raw camPitch a left-drag orbit happens to be at (the WoW rule:
+    // left-drag is sightseeing, right-drag steers the swimmer).
+    this.swimLookDown = this.swimAimPitch >= enterDown;
+    this.swimLookUp = this.swimAimPitch <= enterUp;
+    // ...and the bands only ACT while the player is actually swimming
+    // somewhere (a move key held). Floating in place and pointing the view at
+    // the lake bed must not sink you; the explicit dive key always does.
+    const bandDown = moving && this.swimLookDown;
+    const bandUp = moving && this.swimLookUp;
+    const dive = keyDive || bandDown;
+    const surface = bandUp;
+    // A held KEY is not a steer, so it dives at full rate; the camera grades.
+    const swimSteer = keyDive
+      ? 1
+      : bandDown
+        ? swimSteerFromPitch(this.swimAimPitch, SWIM_LOOK_DOWN, SWIM_DIVE_FULL)
+        : bandUp
+          ? swimSteerFromPitch(this.swimAimPitch, SWIM_LOOK_UP, SWIM_SURFACE_FULL)
+          : 0;
+    return { dive, surface, swimSteer };
+  }
+
+  /** Any horizontal movement input held, from any device — the gate the swim
+   *  camera bands ride (readSwimSteer). Mirrors the readMoveInput sources. */
+  private anyMoveHeld(): boolean {
+    return (
+      this.heldAction('forward') ||
+      this.heldAction('back') ||
+      this.heldAction('strafeLeft') ||
+      this.heldAction('strafeRight') ||
+      this.heldAction('turnLeft') ||
+      this.heldAction('turnRight') ||
+      (this.leftDown && this.rightDown) ||
+      this.autorun ||
+      this.touchMove.forward ||
+      this.touchMove.back ||
+      this.touchMove.strafeLeft ||
+      this.touchMove.strafeRight ||
+      this.gamepadMove.forward ||
+      this.gamepadMove.back ||
+      this.gamepadMove.strafeLeft ||
+      this.gamepadMove.strafeRight
+    );
+  }
+
   readMoveInput(): MoveInput {
     if (this.suspendMovement) {
       // A game menu / modal is open (or chat is focused). Suppress held keys and
@@ -1363,6 +1495,8 @@ export class Input {
         strafeLeft: false,
         strafeRight: false,
         jump: false,
+        dive: false,
+        surface: false,
       };
     }
     if (this.controllerMoveInput) return { ...this.controllerMoveInput };
@@ -1380,12 +1514,23 @@ export class Input {
       this.keybinds.codesForAction('jump').some((c) => this.keys.has(comboCode(c))) ||
       performance.now() <= this.touchJumpUntil ||
       performance.now() <= this.keyJumpUntil;
+    // Swim down / up, from the CAMERA as well as the keys: steer the view down
+    // (right-drag) while swimming forward and you dive, tilt it back up and
+    // you rise. The camera bands only act while a MOVE key is held and only
+    // read steering looks — floating in place and orbiting with left-drag
+    // never moves the body (the WoW rule). Every flag here is only ever read
+    // while swimming, so aiming the camera around on land is inert. See
+    // SWIM_LOOK_* for the bands and swimSteer for the graded rate.
+    const { dive, surface, swimSteer } = this.readSwimSteer(this.anyMoveHeld());
 
     if (this.mouseCameraEnabled) {
       return {
         forward,
         back,
         jump,
+        dive,
+        surface,
+        swimSteer,
         turnLeft: false,
         turnRight: false,
         strafeLeft:
@@ -1408,6 +1553,9 @@ export class Input {
       forward,
       back,
       jump,
+      dive,
+      surface,
+      swimSteer,
       strafeLeft:
         held('strafeLeft') ||
         (mouselook && aHeld) ||

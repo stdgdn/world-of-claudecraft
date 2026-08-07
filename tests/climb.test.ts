@@ -324,6 +324,8 @@ describe('the climb through a live Sim', () => {
         strafeLeft: false,
         strafeRight: false,
         jump: true,
+        dive: false,
+        surface: false,
       });
       sim.tick();
       if (p.onGround && Math.abs(p.pos.y - crateTop) < 0.05) reachedTop = true;
@@ -415,6 +417,8 @@ describe('the climb against real world geometry', () => {
         strafeLeft: false,
         strafeRight: false,
         jump: true,
+        dive: false,
+        surface: false,
       });
       sim.tick();
       if (p.climb) climbed = true;
@@ -466,6 +470,8 @@ describe('the climb onto the town roofs', () => {
             strafeLeft: false,
             strafeRight: false,
             jump: false,
+            dive: false,
+            surface: false,
           },
           input,
         );
@@ -544,6 +550,8 @@ describe('the climb onto the town roofs', () => {
         strafeLeft: false,
         strafeRight: false,
         jump: false,
+        dive: false,
+        surface: false,
       });
       sim.tick();
     }

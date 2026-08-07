@@ -135,6 +135,7 @@ describe('adminGuildBankView (the operator projection)', () => {
       capacity: 0,
       purchasedSlots: 0,
       nextExpansionPrice: 90_000,
+      canEdit: true,
     } satisfies GuildBankInfo);
     expect(empty).toEqual({
       treasury: 0,

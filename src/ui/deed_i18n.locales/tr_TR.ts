@@ -7,6 +7,46 @@
 import type { DeedLocaleTable } from '../deed_i18n';
 
 export const table: DeedLocaleTable = {
+  pvp_bg_first_capture: {
+    name: 'Elde Sancak',
+    desc: "Dikenvadi Ovası'nda bir sancak ele geçir.",
+  },
+  pvp_bg_first_win: {
+    name: 'Vadi Tutunuyor',
+    desc: 'Bir Dikenvadi Ovası savaşını kazan.',
+  },
+  pvp_bg_wins_25: {
+    name: 'Vadinin Muhafızı',
+    desc: '25 Dikenvadi Ovası savaşı kazan.',
+    title: 'Sancaktar',
+  },
+  pvp_bg_captures_100: {
+    name: 'Yüz Sancak',
+    desc: "Kariyerin boyunca Dikenvadi Ovası'nda 100 sancak ele geçir.",
+  },
+  dgn_rift: {
+    name: 'Yarık Gezgini',
+    desc: 'Kat şefini yenerek bir Yarığı temizle.',
+  },
+  dgn_rift_s_rank: {
+    name: 'Yarık Hükümdarı',
+    desc: 'Bir Yarık portalının oluşturabileceği en zor kademe olan S dereceli bir Yarığı temizle.',
+  },
+  pvp_honor_sergeant: {
+    name: 'Çavuş',
+    desc: 'Ömrün boyunca 10.000 onur kazan. Onu harcamak rütbeni asla kaybettirmez.',
+    title: 'Çavuş',
+  },
+  pvp_honor_knight_lieutenant: {
+    name: 'Şövalye-Teğmen',
+    desc: 'Ömrün boyunca 40.000 onur kazan, arkanda gerçek bir savaş mevsimi bırak.',
+    title: 'Şövalye-Teğmen',
+  },
+  pvp_honor_field_marshal: {
+    name: 'Saha Mareşali',
+    desc: 'Ömrün boyunca 150.000 onur kazan. Herhangi bir diyarda nadirdir, ve öyle de olmalı.',
+    title: 'Saha Mareşali',
+  },
   chr_drakemaw_broodlord: {
     name: 'Kuluçka Kırıcı',
     desc: "Bir Ejder Ağzı Yuva Lordu'nu, narasına, yarma darbesine ve ateşine rağmen, yumurtalarının ortasında öldür.",
@@ -14,6 +54,54 @@ export const table: DeedLocaleTable = {
   chr_maw_matriarch: {
     name: 'Gök Sessizleşiyor',
     desc: "Ağız Anaerkili Cindraleth'i, Ejder Ağzı'nın üzerindeki krater tüneğinde öldür.",
+  },
+  chr_frostveil_gatherer: {
+    name: 'Teras Hasadi',
+    desc: 'Frostveil de bir cevher damari, bir odun alani ve bir ot yatagi hasat et.',
+  },
+  chr_frostveil_first_cast: {
+    name: 'Golcukte Ilk Buz',
+    desc: 'Frostveil sularindan bir balik yakala.',
+  },
+  chr_amberfall_gatherer: {
+    name: 'Amberfall Hasadi',
+    desc: 'Amberfall da bir cevher damari, bir odun alani ve bir ot yatagi hasat et.',
+  },
+  chr_amberfall_first_cast: {
+    name: 'Buyuk Batakliktan Bir Av',
+    desc: 'Amberfall sularindan bir balik yakala.',
+  },
+  chr_nightbloom_gatherer: {
+    name: 'Dusleyen Hasat',
+    desc: 'Nightbloom da bir cevher damari, bir odun alani ve bir ot yatagi hasat et.',
+  },
+  chr_nightbloom_first_cast: {
+    name: 'Ay Kuyusunda Bir Halka',
+    desc: 'Nightbloom sularindan bir balik yakala.',
+  },
+  chr_wraithwood_gatherer: {
+    name: 'Golge Altinda Hasat',
+    desc: 'Wraithwood da bir cevher damari, bir odun alani ve bir ot yatagi hasat et.',
+  },
+  chr_wraithwood_first_cast: {
+    name: 'Ayna Koyunda Bir Atis',
+    desc: 'Wraithwood sularindan bir balik yakala.',
+  },
+  chr_palmreach_gatherer: {
+    name: 'Palmiye Kiyisinda Hasat',
+    desc: 'Palmreach te bir cevher damari, bir odun alani ve bir ot yatagi hasat et.',
+  },
+  chr_palmreach_first_cast: {
+    name: 'Safir Lagune Atis',
+    desc: 'Palmreach sularindan bir balik yakala.',
+  },
+  chr_evergarden_gatherer: {
+    name: 'Parterin Bereketi',
+    desc: 'Evergarden da bir cevher damari, bir odun alani ve bir ot yatagi hasat et.',
+  },
+  chr_evergarden_first_cast: {
+    name: 'Yaprak Havuzunda Bir Atis',
+    desc: 'Evergarden sularindan bir balik yakala.',
   },
   pvp_card_duel_first_win: {
     name: 'Ev Kuralları',
@@ -827,5 +915,33 @@ export const table: DeedLocaleTable = {
   chr_farshore_first_cast: {
     name: 'Martıların Bildiği',
     desc: "Uzak Kıyı'nın sularından bir balık tut.",
+  },
+  prog_engineering_rare: {
+    name: 'Hassas Mühendislik',
+    desc: 'Mühendislikte ilk ender eşyanı işle.',
+  },
+  prog_alchemy_rare: {
+    name: 'Ender Bir Yıllık',
+    desc: 'Simyada ilk ender eşyanı işle.',
+  },
+  prog_cooking_rare: {
+    name: 'Unutulmaz Bir Yemek',
+    desc: 'Yemek Pişirmede ilk ender eşyanı işle.',
+  },
+  prog_leatherworking_rare: {
+    name: 'İnce Tabaklama',
+    desc: 'Deri İşlemede ilk ender eşyanı işle.',
+  },
+  prog_tailoring_rare: {
+    name: 'Bir Usta Dikişi',
+    desc: 'Terzilikte ilk ender eşyanı işle.',
+  },
+  prog_weaponcrafting_rare: {
+    name: 'Parlayana Kadar Tavlandı',
+    desc: 'Silah Yapımında ilk ender eşyanı işle.',
+  },
+  prog_armorcrafting_rare: {
+    name: 'Kusursuza Kaplandı',
+    desc: 'Zırh Yapımında ilk ender eşyanı işle.',
   },
 };

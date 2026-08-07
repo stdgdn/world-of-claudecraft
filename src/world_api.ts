@@ -29,6 +29,7 @@
 //   trade.ts            IWorldTrade          peer-to-peer trade window
 //   chat.ts             IWorldChat           chat router + emotes
 //   duel_arena.ts       IWorldDuelArena      duels + ranked arena + 2v2 fiesta
+//   battleground.ts     IWorldBattleground   Thornhollow Fields 5v5 capture-the-flag queue + match view
 //   social_graph.ts     IWorldSocialGraph    friends/blocks/guild (online-only frames)
 //   market.ts           IWorldMarket         World Market browse/list/buy
 //   mail.ts             IWorldMail           Ravenpost mail send/take + unread badge
@@ -41,7 +42,8 @@
 //                                            content + basic crafting action landed in #1127)
 //   bank.ts             IWorldBank           per-character deposit box (proximity-gated info +
 //                                            deposit/withdraw/buy-slots)
-//   guild_bank.ts       IWorldGuildBank      shared guild treasury + item store (officer-plus,
+//   guild_bank.ts       IWorldGuildBank      shared guild treasury + item store (guild-wide view
+//                                            with canEdit marking officer-plus EDITS,
 //                                            proximity-gated info + gold/item/buy-slots commands)
 //   vale_cup.ts         IWorldValeCup        Vale Cup boarball queue/roles/betting/practice
 //   mounts.ts           IWorldMounts         rideable ground mounts: pick + mount/dismount
@@ -62,6 +64,7 @@
 
 import type { IWorldActionBar } from './world_api/action_bar';
 import type { IWorldBank } from './world_api/bank';
+import type { IWorldBattleground } from './world_api/battleground';
 import type { IWorldCardMinigame } from './world_api/card_minigame';
 import type { IWorldChat } from './world_api/chat';
 import type { IWorldCombat } from './world_api/combat';
@@ -115,7 +118,7 @@ export type {
 // discriminator. Changing the authoritative town layout requires a new epoch:
 // the strict discriminator makes both rolling-deploy directions fail closed
 // before either binary loads a character into a differently shaped world.
-export const ONLINE_WORLD_LAYOUT_VERSION = 3 as const;
+export const ONLINE_WORLD_LAYOUT_VERSION = 5 as const;
 export const ONLINE_WORLD_AUTH_TYPE = `auth-world-${ONLINE_WORLD_LAYOUT_VERSION}` as const;
 // The one wire literal both sides emit for a layout-epoch mismatch. The server
 // rejects with it, the client synthesizes it for pre-epoch servers, and the UI
@@ -144,6 +147,13 @@ export type {
   ActionBarSlotAction,
 } from './world_api/action_bar';
 export type { BankBonusSource, BankInfo } from './world_api/bank';
+export type {
+  BgFlagInfo,
+  BgInfo,
+  BgLadderEntry,
+  BgMatchInfo,
+  BgPlayerInfo,
+} from './world_api/battleground';
 export type { CardMinigameInfo } from './world_api/card_minigame';
 export { isOverheadEmoteId, OVERHEAD_EMOTES } from './world_api/chat';
 export type { ActiveFrostRing, ActiveTemporalHourglass } from './world_api/combat';
@@ -261,6 +271,7 @@ export interface IWorld
     IWorldTrade,
     IWorldChat,
     IWorldDuelArena,
+    IWorldBattleground,
     IWorldCardMinigame,
     IWorldSocialGraph,
     IWorldMarket,
@@ -510,27 +521,54 @@ export const COMMAND_NAMES = [
   // Guild billboard: set (or clear, with '') the officer-editable message
   // pinned atop the social window's Guild tab (SocialService.guildSetMotd).
   'guild_set_motd',
+  // Commission order board (Professions 2.0, issue #1298): open/cancel a
+  // commission request, or accept/deliver one as a crafter (Sim.
+  // openCommissionOrder/cancelCommissionOrder/acceptCommissionOrder/
+  // deliverCommissionOrder via src/sim/professions/commission_order.ts).
+  'open_commission_order',
+  'cancel_commission_order',
+  'accept_commission_order',
+  'deliver_commission_order',
+  // "Stop Auto-Attack on Target Switch" QoL preference (issue #1358): mirrors
+  // the client setting onto the authoritative Targeting slice so every
+  // target-switch selector can gate on it (Sim.setStopAutoAttackOnTargetSwitch
+  // via src/sim/targeting.ts).
+  'stopAutoAttackOnTargetSwitch',
+  // Thornhollow Fields 5v5 capture-the-flag: queue join/leave and the deliberate
+  // battleground action press (flag pickup; Sim.bgQueueJoin/bgQueueLeave/
+  // bgFlagAction via src/sim/social/battleground.ts). dev_bg_start is the
+  // env-gated force-start (dispatch-only, below).
+  'bg_queue',
+  'bg_leave',
+  'bg_flag',
+  'dev_bg_start',
   // Profiler-only server authority: idempotently prevents incoming damage while
   // preserving normal outgoing damage and incoming hit presentation.
   'dev_profiler_invulnerable',
-  // The Guild Bank cluster (officer-plus shared treasury + item store,
-  // src/sim/guild_bank.ts). Its own guild_bank_* tokens forever, NEVER a reuse
+  // The Guild Bank cluster (shared treasury + item store, viewable guild-wide,
+  // EDITABLE officer-plus only: every token below is a mutating op the sim
+  // refuses for a plain member, src/sim/guild_bank.ts). Its own guild_bank_*
+  // tokens forever, NEVER a reuse
   // of the personal bank_* strings (state.md decision; pinned by
   // tests/command_facets.test.ts). `slot` is a container index and `count`
   // optional (the bank_* wire idiom); `amount` is copper. The Sim owns every
-  // gameplay rule (banker proximity, officer-plus rank, quest-bind, caps,
-  // table price); the server validates shape only.
+  // gameplay rule (banker proximity, officer-plus rank on edits, quest-bind,
+  // caps, table price); the server validates shape only.
   'guild_bank_deposit_gold',
   'guild_bank_withdraw_gold',
   'guild_bank_deposit',
   'guild_bank_withdraw',
   'guild_bank_buy_slots',
-  // The guild bank ACTIVITY LOG request (the officer-visible history of the
-  // append-only bank_ledger rows). A pure READ token: it mutates nothing, and
+  // The guild bank ACTIVITY LOG request (the guild-visible history of the
+  // append-only bank_ledger rows; readable by every member since the v0.35
+  // member read-only view). A pure READ token: it mutates nothing, and
   // its answer comes back on its own one-shot 'gbanklog' frame rather than the
-  // 20 Hz snapshot, because the payload is cold, identical for every officer of
+  // 20 Hz snapshot, because the payload is cold, identical for every member of
   // the guild, and 50 rows wide. Sent only while the log view is open.
   'guild_bank_log',
+  // Paperdoll eye toggle: helmet-visibility preference on the composed body.
+  // Appended because wire tokens are never reordered.
+  'set_helm',
 ] as const;
 
 // The union both the send path (`online.ts`) and the dispatch switch
@@ -553,6 +591,7 @@ export const DISPATCH_ONLY_COMMANDS = [
   'leave_crypt',
   'social_refresh',
   'targetNearest',
+  'dev_bg_start',
   // Riding-lesson leftovers: 'mount_train_answer' (the removed lean-cue arm) and
   // 'mount_train_abort' (the removed course minigame's cancel) no longer have a
   // ClientWorld sender, but the wire strings ARE the protocol (append-only), so
@@ -596,6 +635,7 @@ export type WorldFacet =
   | 'IWorldTrade'
   | 'IWorldChat'
   | 'IWorldDuelArena'
+  | 'IWorldBattleground'
   | 'IWorldCardMinigame'
   | 'IWorldSocialGraph'
   | 'IWorldMarket'
@@ -633,6 +673,7 @@ export const COMMAND_FACETS = {
   tab: 'IWorldTargeting',
   targetNearestFriendly: 'IWorldTargeting',
   tabFriendly: 'IWorldTargeting',
+  stopAutoAttackOnTargetSwitch: 'IWorldTargeting',
   // IWorldLoot: need-greed roll submit.
   lootRoll: 'IWorldLoot',
   // IWorldInventory: non-fungible Rift gear progression. These mutate the
@@ -663,6 +704,7 @@ export const COMMAND_FACETS = {
   unequip_mech_chroma: 'IWorldCosmetics',
   change_weapon_skin: 'IWorldCosmetics',
   stow_weapon: 'IWorldCosmetics',
+  set_helm: 'IWorldCosmetics',
   // IWorldPet: hunter-pet commands (snake_case wire strings, by design; pet state
   // mirrors on the owned-mob entity wire, not a self-snapshot field).
   pet_abandon: 'IWorldPet',
@@ -710,6 +752,10 @@ export const COMMAND_FACETS = {
   arena_queue: 'IWorldDuelArena',
   arena_leave: 'IWorldDuelArena',
   arena_augment: 'IWorldDuelArena',
+  // IWorldBattleground: the Thornhollow Fields queue + the deliberate flag action.
+  bg_queue: 'IWorldBattleground',
+  bg_leave: 'IWorldBattleground',
+  bg_flag: 'IWorldBattleground',
   // IWorldCardMinigame: the Card Duel minigame queue + in-match card plays.
   // cardMinigameInfo is a snapshot read (no send).
   card_queue_join: 'IWorldCardMinigame',

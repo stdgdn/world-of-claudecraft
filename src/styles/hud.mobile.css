@@ -223,11 +223,15 @@
   }
   /* Floating move joystick: a lower-left capture zone lets the thumb land
      anywhere; the joystick rests dimmed at home until touched, then springs to
-     the touch point with a gold "engaged" glow. */
+     the touch point with a gold "engaged" glow. Anchored with the same
+     env(safe-area-inset-left)/env(safe-area-inset-bottom) offsets as the
+     .mobile-joystick rule it hosts (every other touch control already does
+     this), so the capture zone itself does not sit under a notch or the home
+     indicator gesture strip; the zone's own width/height stay untouched. */
   body.mobile-touch #mobile-move-zone {
     position: absolute;
-    left: 0;
-    bottom: 0;
+    left: max(18px, env(safe-area-inset-left));
+    bottom: calc(26px + env(safe-area-inset-bottom));
     width: min(30vw, 132px);
     min-width: 112px;
     max-width: 132px;
@@ -1407,6 +1411,15 @@
     width: 100%;
     min-width: 0;
   }
+  /* Desktop groups the pet command bar and the pet health frame into one row
+     (#pet-cluster). Mobile deliberately splits them again: the command bar belongs
+     under the thumb at the top of the screen, the health strip belongs in the
+     bottom-centre column with the player frame, and one 570px row would not fit a
+     phone anyway. display:contents dissolves the wrapper so each child keeps the
+     independent fixed seat the rules below give it. */
+  body.mobile-touch #pet-cluster {
+    display: contents;
+  }
   body.mobile-touch #petbar {
     position: fixed;
     left: 50%;
@@ -1810,6 +1823,40 @@
     transform: translateX(-50%) scale(calc(0.82 * var(--mobile-chrome-scale, 1)));
     transform-origin: center bottom;
   }
+  /* Pet frame on mobile: the desktop rule keeps it in the #actionbar-stack flow,
+     which does not exist here (the player frame is lifted out to position:fixed),
+     so re-seat it into the same reserved bottom-centre column, stacked ABOVE the
+     cast and swing bars (player frame 14px, cast 68px, swing 76px). Seating it on
+     top of the column rather than between the frame and the bars is deliberate:
+     the pet strip appears and disappears with the pet, and displacing the two bars
+     would move a cast bar mid-cast. It KEEPS its portrait here, unlike the cast bar
+     which drops its label: the frame is a tap target that selects the pet, and a
+     portrait-less strip renders about 20px tall, under the 40x40 mobile touch
+     floor. With the portrait the visible frame is ~48px rendered at this scale, so
+     the tap area is the floor without an invisible band over the world. */
+  body.mobile-touch #pet-frame {
+    position: fixed;
+    left: 50%;
+    top: auto;
+    bottom: calc(88px + env(safe-area-inset-bottom));
+    z-index: 21;
+    width: 300px;
+    margin: 0;
+    justify-content: flex-start;
+    /* The desktop rule pays --unit-frame-content-inset because the desktop player
+       frame CENTRES its content in a 612px box. The mobile player frame is
+       flex-start with no inset, so inheriting it here pushes this strip about 18px
+       right of the frame it hangs under. Reset, do not inherit. */
+    padding-left: 0;
+    zoom: 1;
+    transform: translateX(-50%) scale(calc(0.82 * var(--mobile-chrome-scale, 1)));
+    transform-origin: center bottom;
+  }
+  body.mobile-touch #pet-frame .uf-bars {
+    width: 224px;
+    max-width: 224px;
+    flex: none;
+  }
   body.mobile-touch #player-frame .portrait-wrap {
     z-index: 3;
   }
@@ -2006,6 +2053,19 @@
   body.mobile-touch #party-frames .party-frame .pfm-name .lead,
   body.mobile-touch #party-frames .party-frame .pf-badge {
     font-size: 9px;
+  }
+  /* The pet sliver shrinks with the rest of the mobile row (its bars are 5px here,
+     down from 9px on desktop), staying a hairline cue rather than competing with the
+     member's own health. It is not a primary tap target on mobile: the member row
+     owns the tap, and selecting a party member's pet is a desktop-scale interaction. */
+  body.mobile-touch #party-frames .party-frame .pfm-pet {
+    height: 3px;
+    margin-top: 1px;
+    /* Makes the "the member row owns the tap" claim above actually true. At 3px this
+       is nowhere near the 40x40 touch floor, and without this a tap landing on it
+       selects the pet and stopPropagation swallows the member selection the player
+       meant. Informational on touch; the row keeps the whole tap area. */
+    pointer-events: none;
   }
   body.mobile-touch #party-frames .party-frame .bar {
     height: 5px;
@@ -2329,7 +2389,7 @@
      under the mirrored action ring on the left). */
   body.mobile-touch.mobile-left-handed #mobile-move-zone {
     left: auto;
-    right: 0;
+    right: max(18px, env(safe-area-inset-right));
   }
   /* The paged action ring (Phase 1) lives bottom-right, the same corner the
      move joystick mirrors to above. Pin the ring to the LEFT in left-handed
@@ -2464,6 +2524,19 @@
     white-space: normal;
     overflow-wrap: anywhere;
   }
+  /* The secondary lines scale with the title. Without this they stay at the
+     desktop 18px while the verdict drops to 26px, so on a phone a three-line
+     battleground result reads as four near-equal lines instead of one headline
+     over its detail, and the taller block runs into the result scoreboard
+     below it. */
+  body.mobile-touch #banner .banner-subtext {
+    font-size: calc(13px * var(--mobile-chrome-scale, 1));
+    line-height: 1.25;
+    margin-top: 4px;
+  }
+  body.mobile-touch #banner .banner-subtext + .banner-subtext {
+    margin-top: 1px;
+  }
   body.mobile-touch #banner.banner-with-art {
     gap: 6px;
   }
@@ -2475,6 +2548,18 @@
   body.mobile-touch #banner.banner-deed {
     font-size: calc(19px * var(--mobile-chrome-scale, 1));
     padding: 6px 14px;
+  }
+  body.mobile-touch #banner.banner-skill {
+    font-size: calc(20px * var(--mobile-chrome-scale, 1));
+    padding: 8px 16px 10px;
+    gap: 8px;
+  }
+  body.mobile-touch #banner.banner-skill .banner-subtext {
+    font-size: calc(13px * var(--mobile-chrome-scale, 1));
+  }
+  body.mobile-touch #banner.banner-skill .banner-art {
+    width: 40px;
+    height: 40px;
   }
   body.mobile-touch #banner .banner-art {
     width: 34px;
@@ -2788,6 +2873,7 @@
   body.mobile-touch #vendor-window,
   body.mobile-touch #train-window,
   body.mobile-touch #unbind-window,
+  body.mobile-touch #commission-board-window,
   body.mobile-touch #market-window,
   body.mobile-touch #quest-dialog,
   body.mobile-touch #calendar-window,
@@ -2844,6 +2930,48 @@
   body.mobile-touch .crafting-tab {
     min-height: 40px;
     white-space: nowrap;
+  }
+  /* Craft cast Phase 2: readable duration + 40px craft control floor on touch. */
+  body.mobile-touch .crafting-duration-chip {
+    font-size: 12px;
+    padding: 2px 7px;
+  }
+  body.mobile-touch .crafting-recipe-btn {
+    min-height: 40px;
+  }
+  body.mobile-touch .crafting-craft-chip {
+    min-height: 40px;
+    min-width: 40px;
+    padding: 10px 16px;
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  body.mobile-touch .crafting-cast-progress {
+    min-height: 40px;
+    padding: 8px 10px;
+  }
+  body.mobile-touch .crafting-cast-progress-track {
+    height: 22px;
+  }
+  body.mobile-touch .crafting-cast-progress-label {
+    font-size: 13px;
+  }
+  body.mobile-touch .crafting-cast-progress-timer {
+    font-size: 13px;
+  }
+  body.mobile-touch .crafting-cast-progress-batch {
+    font-size: 12px;
+  }
+  /* Phase 3 batch: 40px touch floor on qty stepper and Create All. */
+  body.mobile-touch .crafting-qty-btn,
+  body.mobile-touch .crafting-create-all-btn {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  body.mobile-touch .crafting-qty-value {
+    font-size: 16px;
   }
   /* Phase 22 retired the mobile-only track override, the full-width Cap wrap,
      and the Cap-header hide with the grid table itself: the rows are the
@@ -3341,7 +3469,8 @@
   body.mobile-touch #tooltip.mob-tooltip .tt-red,
   body.mobile-touch #tooltip.mob-tooltip .tt-green,
   body.mobile-touch #tooltip.mob-tooltip .tt-quest-name,
-  body.mobile-touch #tooltip.mob-tooltip .tt-quest-obj {
+  body.mobile-touch #tooltip.mob-tooltip .tt-quest-obj,
+  body.mobile-touch #tooltip.mob-tooltip .tt-rank {
     font-size: calc(10px * var(--tooltip-scale, 1));
     line-height: 1.2;
   }
@@ -3597,10 +3726,12 @@
   body.mobile-touch #unbind-window,
   body.mobile-touch #quest-log-window,
   body.mobile-touch #vendor-window,
+  body.mobile-touch #warfare-window,
   body.mobile-touch #quest-dialog,
   body.mobile-touch #spellbook,
   body.mobile-touch #options-menu,
   body.mobile-touch #options-menu.kb-wide,
+  body.mobile-touch #options-menu.gfx-wide,
   body.mobile-touch #options-menu.perf-wide {
     left: 50%;
     right: auto;
@@ -3615,9 +3746,24 @@
   body.mobile-touch #unbind-window,
   body.mobile-touch #quest-log-window,
   body.mobile-touch #vendor-window,
+  body.mobile-touch #warfare-window,
   body.mobile-touch #quest-dialog {
     width: clamp(320px, 76vw, 680px);
     max-width: calc(100vw - 20px);
+  }
+  /* The WARFARE shop is many sections deep (one per armor family, plus jewelry
+     and weapons), so it takes the vendor window's full top-to-bottom treatment
+     rather than the shorter quest-log clamp: same
+     --window-scale division for the #ui zoom, same reserved 12px top offset
+     from the centered-sheet base, same safe-area bottom margin. */
+  body.mobile-touch #warfare-window {
+    max-height: calc(
+      var(--app-vh) /
+      var(--window-scale, 1) -
+      12px -
+      max(10px, env(safe-area-inset-bottom))
+    );
+    overflow-y: auto;
   }
   body.mobile-touch #quest-log-window,
   body.mobile-touch #quest-dialog {
@@ -3669,6 +3815,7 @@
   body.mobile-touch #spellbook,
   body.mobile-touch #options-menu,
   body.mobile-touch #options-menu.kb-wide,
+  body.mobile-touch #options-menu.gfx-wide,
   body.mobile-touch #options-menu.perf-wide {
     width: min(560px, calc(var(--app-vw) / var(--ui-scale, 1) - 20px));
     max-height: calc(var(--app-vh) / var(--ui-scale, 1) - 92px);
@@ -3867,6 +4014,10 @@
       gap: 6px;
     }
     body.mobile-touch #bank-window .gbank-dormant-note {
+      margin: 0 0 2px;
+      font-size: 10px;
+    }
+    body.mobile-touch #bank-window .gbank-readonly-note {
       margin: 0 0 2px;
       font-size: 10px;
     }
@@ -4082,6 +4233,26 @@
   }
   body.mobile-touch .perf-card {
     padding: 8px 15px 14px;
+  }
+  /* Graphics panel on touch: the same roomier width as the perf panel, cards
+     stacked single-column (the components.css mobile-touch .gfx-cols rule).
+     Divided by the live UI scale like the shared options-panel rule above,
+     NOT a raw 100vw: #ui's zoom multiplies every author length, so a raw
+     viewport unit overflows the screen at any --ui-scale above 1. The cards
+     themselves ride the perf-card family, so the .perf-card touch rules
+     already cover them. */
+  body.mobile-touch #options-menu.gfx-wide {
+    width: min(640px, calc(var(--app-vw) / var(--ui-scale, 1) - 24px));
+  }
+  /* The inline action row wraps on touch: the status takes its own leading
+     line so the three buttons keep comfortable side-by-side targets. */
+  body.mobile-touch .gfx-footer {
+    flex-wrap: wrap;
+  }
+  body.mobile-touch .gfx-footer .graphics-apply-status {
+    flex-basis: 100%;
+    order: -1;
+    text-align: left;
   }
   /* Options/settings row heights (Phase 4, presentation only): every touch-gated
      settings row (graphics/audio/interface panels via settingsViewShell's bare
@@ -4492,6 +4663,25 @@
   body.mobile-touch #arena-window .btn {
     min-height: 40px;
     box-sizing: border-box;
+  }
+  /* Thornhollow Fields scoreboard: compacted for the 844x390 landscape HUD so it clears
+     the top button clusters; the respawn overlay rides the same midline. */
+  body.mobile-touch #bg-scoreboard {
+    top: 4px;
+    min-width: 250px;
+    padding: 3px 10px 5px;
+  }
+  body.mobile-touch #bg-scoreboard .bg-score {
+    font-size: 19px;
+  }
+  body.mobile-touch #bg-scoreboard .bg-team {
+    font-size: 11px;
+  }
+  body.mobile-touch #bg-scoreboard .bg-under {
+    font-size: 11px;
+  }
+  body.mobile-touch #bg-respawn {
+    font-size: 18px;
   }
   /* Vale Cup: the join/leave .btn and the guild-record toggle (its pickers already
      carry a pointer:coarse floor). */
@@ -5131,6 +5321,19 @@
       min-width: 0;
       height: 4px;
     }
+    /* Same bottom-centre column as portrait, one notch lower to match the shorter
+       landscape band (player frame 10px, cast 62px, swing 70px), and at the
+       landscape frame scale so the strip matches the player frame's width.
+       0.6 renders the frame ~35px, under the 40px touch floor: deliberately the
+       SAME size as the #player-frame directly below it, which is itself a tap
+       target (self-target) already shipping at this scale in landscape. Sizing
+       the pet frame larger than the frame it hangs under to win the floor would
+       invert their visual hierarchy; the landscape tier trades size for the
+       shorter viewport everywhere, and this follows the established baseline. */
+    body.mobile-touch #pet-frame {
+      bottom: calc(80px + env(safe-area-inset-bottom));
+      transform: translateX(-50%) scale(calc(0.6 * var(--mobile-chrome-scale, 1)));
+    }
     body.mobile-touch #petbar {
       top: max(6px, env(safe-area-inset-top));
       /* No scale(0.88) on landscape: it shrank the 40px pet command buttons to
@@ -5452,7 +5655,8 @@
     left: calc(50% - 15px);
   }
   body.mobile-touch.hud-mobile-compact #castbar,
-  body.mobile-touch.hud-mobile-compact #swingbar {
+  body.mobile-touch.hud-mobile-compact #swingbar,
+  body.mobile-touch.hud-mobile-compact #pet-frame {
     left: calc(50% - 15px);
   }
   /* Left-handed mirrors Jump (and the ring) to the left, so mirror this nudge
@@ -5461,7 +5665,8 @@
     left: calc(50% + 15px);
   }
   body.mobile-touch.hud-mobile-compact.mobile-left-handed #castbar,
-  body.mobile-touch.hud-mobile-compact.mobile-left-handed #swingbar {
+  body.mobile-touch.hud-mobile-compact.mobile-left-handed #swingbar,
+  body.mobile-touch.hud-mobile-compact.mobile-left-handed #pet-frame {
     left: calc(50% + 15px);
   }
   /* Narrowest compact phones (galaxy-s8-class 740px and below): at that width the
@@ -5481,13 +5686,15 @@
   @media (max-width: 800px) and (orientation: landscape) {
     body.mobile-touch.hud-mobile-compact #player-frame,
     body.mobile-touch.hud-mobile-compact #castbar,
-    body.mobile-touch.hud-mobile-compact #swingbar {
+    body.mobile-touch.hud-mobile-compact #swingbar,
+    body.mobile-touch.hud-mobile-compact #pet-frame {
       left: calc(50% - 44px);
     }
     /* Left-handed mirror of the nudge above, same magnitude, opposite side. */
     body.mobile-touch.hud-mobile-compact.mobile-left-handed #player-frame,
     body.mobile-touch.hud-mobile-compact.mobile-left-handed #castbar,
-    body.mobile-touch.hud-mobile-compact.mobile-left-handed #swingbar {
+    body.mobile-touch.hud-mobile-compact.mobile-left-handed #swingbar,
+    body.mobile-touch.hud-mobile-compact.mobile-left-handed #pet-frame {
       left: calc(50% + 44px);
     }
   }
@@ -5518,8 +5725,16 @@
   @media (orientation: landscape) {
     body.mobile-touch.hud-mobile-tablet #player-frame,
     body.mobile-touch.hud-mobile-tablet #castbar,
-    body.mobile-touch.hud-mobile-tablet #swingbar {
+    body.mobile-touch.hud-mobile-tablet #swingbar,
+    body.mobile-touch.hud-mobile-tablet #pet-frame {
       left: calc(50% - 10px);
+    }
+    /* Left-handed mirror of the nudge above, same magnitude, opposite side. */
+    body.mobile-touch.hud-mobile-tablet.mobile-left-handed #player-frame,
+    body.mobile-touch.hud-mobile-tablet.mobile-left-handed #castbar,
+    body.mobile-touch.hud-mobile-tablet.mobile-left-handed #swingbar,
+    body.mobile-touch.hud-mobile-tablet.mobile-left-handed #pet-frame {
+      left: calc(50% + 10px);
     }
   }
 

@@ -255,6 +255,15 @@ export const ZONE_FISH: Record<string, readonly string[]> = {
   willowfen: ['raw_mirror_trout', 'raw_river_perch', 'glimmerfin_koi'],
   galecrest: ['raw_mirror_trout', 'raw_river_perch', 'glimmerfin_koi'],
   farshore_isle: ['raw_mirror_trout', 'raw_river_perch', 'glimmerfin_koi'],
+  // The remaining starter-tier zones (content/deeds.ts extends the same
+  // chronicle pair to them; drakelands skipped, see the comment there) draw
+  // the same Vale fallback table, so their rows list the same fish.
+  frostveil: ['raw_mirror_trout', 'raw_river_perch', 'glimmerfin_koi'],
+  amberfall: ['raw_mirror_trout', 'raw_river_perch', 'glimmerfin_koi'],
+  nightbloom: ['raw_mirror_trout', 'raw_river_perch', 'glimmerfin_koi'],
+  wraithwood: ['raw_mirror_trout', 'raw_river_perch', 'glimmerfin_koi'],
+  palmreach: ['raw_mirror_trout', 'raw_river_perch', 'glimmerfin_koi'],
+  evergarden: ['raw_mirror_trout', 'raw_river_perch', 'glimmerfin_koi'],
 };
 
 // The three Chronicler NPCs (interaction-only). Talking to one feeds an
@@ -626,6 +635,23 @@ export const METER_DIRTY_KEYS: Record<DeedMeterId, readonly string[]> = {
   talentPoints: [],
   arenaRankedMatches: [],
   arenaRankedWins: [],
+  bgWins: [],
+  bgCaptures: [],
+  // The meter reads PlayerMeta.lifetimeHonor directly, never a deedStats ledger,
+  // so no narrow dirty key could name anything it consumes: [] is the only
+  // honest value, which is the condition the guard test instruments for.
+  //
+  // Note what this DOES cost, precisely, because an earlier draft of this comment
+  // overstated it. The three RESULT sites mark a full pass (battleground result,
+  // ranked arena end, fiesta return), but the mid-match drip does not:
+  // awardBattlegroundKillHonor, awardBattlegroundAssistHonor and
+  // awardFiestaKillHonor all grant honor without marking. So a rank threshold
+  // crossed by a killing blow grants at the end of that match rather than on the
+  // tick it was crossed. That is a few minutes of latency on a cosmetic title,
+  // it is identical on every host, and retro-grant-on-load backstops it, so it is
+  // accepted rather than fixed: adding a mark to the per-kill path would put deed
+  // work on a combat hot path to make a title appear slightly sooner.
+  lifetimeHonor: [],
   vcupWins: [],
   vcupGuildWins: [],
   bankPurchasedSlots: [],
@@ -731,6 +757,11 @@ const METERS: Record<DeedMeterId, (meta: PlayerMeta) => number> = {
   talentPoints: (m) => pointsSpent(m.talents),
   arenaRankedMatches: (m) => m.arenaWins + m.arenaLosses + m.arena2v2Wins + m.arena2v2Losses,
   arenaRankedWins: (m) => m.arenaWins + m.arena2v2Wins,
+  bgWins: (m) => m.bgWins,
+  bgCaptures: (m) => m.bgCaptures,
+  // LIFETIME honor, never the spendable balance: a rank once earned survives
+  // every purchase at the WARFARE quartermaster.
+  lifetimeHonor: (m) => m.lifetimeHonor,
   vcupWins: (m) => m.vcupWins,
   vcupGuildWins: (m) => m.vcupGuildWins,
   bankPurchasedSlots: (m) => m.bank.purchasedSlots,
@@ -1890,4 +1921,7 @@ export const VISITED_MARK_NAMESPACES = [
   // already carries (they serialized fine but were dropped on load while the
   // namespace was unregistered).
   'gather_event',
+  // Per-craft rare-tier milestones (issue #2055): the first rare-or-better
+  // output a player crafts IN THAT CRAFT (professions/crafting.ts craftItem).
+  'craft_rare',
 ] as const;

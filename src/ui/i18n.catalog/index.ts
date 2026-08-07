@@ -45,10 +45,13 @@ export { questStrings } from './quests';
 // Re-export the catalog public surface (every name the old i18n.en.ts exported).
 export { shellStrings } from './shell';
 
-type ItemSetEntityText = Record<
-  string,
-  { name: string; bonus2?: string; bonus3?: string; bonus4?: string }
->;
+/** English entity text per item set: the set `name` plus one `bonus<pieces>`
+ *  leaf for every tier the set actually authored. Keyed by the tier's PIECE
+ *  COUNT rather than a fixed bonus2/bonus3/bonus4 triple, so a family with a
+ *  different breakpoint (the WARFARE sets' 2/4/7) mints its own keys instead of
+ *  silently reusing the 4-piece one. See ItemSetBonusField in entity_i18n.ts,
+ *  which resolves the same field back to its count. */
+type ItemSetEntityText = Record<string, { name: string } & Record<string, string>>;
 
 const itemSetEntityText: ItemSetEntityText = Object.fromEntries(
   Object.values(ITEM_SETS)
@@ -56,18 +59,11 @@ const itemSetEntityText: ItemSetEntityText = Object.fromEntries(
     .map((set) => {
       // Only tiers the set actually has: the leveling haste kits carry a single
       // 3-piece tier, so emitting a bonus2 row would bake in an id-fallback string.
-      const bonus2 = set.bonuses.find((bonus) => bonus.pieces === 2)?.text;
-      const bonus3 = set.bonuses.find((bonus) => bonus.pieces === 3)?.text;
-      const bonus4 = set.bonuses.find((bonus) => bonus.pieces === 4)?.text;
-      return [
-        set.id,
-        {
-          name: set.name,
-          ...(bonus2 ? { bonus2 } : {}),
-          ...(bonus3 ? { bonus3 } : {}),
-          ...(bonus4 ? { bonus4 } : {}),
-        },
-      ];
+      const bonuses: Record<string, string> = {};
+      for (const bonus of [...set.bonuses].sort((a, b) => a.pieces - b.pieces)) {
+        bonuses[`bonus${bonus.pieces}`] = bonus.text;
+      }
+      return [set.id, { name: set.name, ...bonuses }];
     }),
 );
 
@@ -373,6 +369,226 @@ export const en = {
     realm: 'World',
     newCharacter: 'New Character',
     appearance: 'Appearance',
+    // Modular character customization (every class): the body is composed
+    // from parts, so these pick the parts and recolour skin/hair.
+    customize: 'Customize',
+    body: 'Body',
+    genderMale: 'Male',
+    genderFemale: 'Female',
+    hair: 'Hair',
+    brows: 'Eyebrows',
+    skinTone: 'Skin Tone',
+    hairColor: 'Hair Color',
+    lightness: 'Light / Dark',
+    colorWheelAria: '{label} color wheel: drag to pick hue and saturation',
+    lightnessAria: '{label} lightness',
+    // Each colour row is a strip of preset swatches plus this one, which opens
+    // the hue wheel for a colour no preset covers.
+    customColor: 'Custom',
+    // A preset swatch shows a colour and carries no text, so this is its
+    // accessible name. Parameterised rather than one string per shade: colour
+    // names do not survive translation cleanly and there are dozens of them.
+    colorPresetAria: '{label} preset {n}',
+    beard: 'Beard',
+    // Face shaping. The six sliders each drive a PAIR of morph targets
+    // (nose_up / nose_dn); the mouth is a crease in the face rather than a
+    // separate part, so its variants are exclusive presets.
+    face: 'Face',
+    faceNose: 'Nose',
+    faceEyes: 'Eye Size',
+    faceJaw: 'Jaw',
+    faceBrow: 'Brow',
+    faceCheeks: 'Cheeks',
+    faceChin: 'Chin',
+    bodyShoulders: 'Shoulders',
+    bodyChest: 'Chest',
+    bodyHips: 'Hips',
+    bodyHands: 'Hand Size',
+    bodyElbows: 'Elbows',
+    bodyKnees: 'Knees',
+    bodyFeet: 'Feet',
+    mouth: 'Mouth',
+    mouthNeutral: 'Neutral',
+    mouthLips: 'Full lips',
+    mouthSmile: 'Smile',
+    mouthFrown: 'Frown',
+    mouthWide: 'Wide',
+    mouthPout: 'Pout',
+    mouthGrin: 'Grin',
+    mouthOpen: 'Open',
+    mouthAwe: 'Awe',
+    // Ears and eyes became their own parts, so they can be swapped and
+    // scaled; the smirk left the base mesh and became a slider.
+    faceEars: 'Ears',
+    faceSmirk: 'Smirk',
+    eyeShape: 'Eye Shape',
+    eyeColor: 'Eye Color',
+    earShape: 'Ear Shape',
+    lashes: 'Eyelashes',
+    lashesOn: 'On',
+    lashesOff: 'Off',
+    lashColor: 'Eyelash Color',
+    // The outfit colorway row: a strip of dye swatches for the worn armour
+    // set. `classic` is the atlas as authored.
+    outfit: 'Outfit Color',
+    outfitClassic: 'Classic',
+    outfitCrimson: 'Crimson',
+    outfitEmber: 'Ember',
+    outfitGold: 'Gold',
+    outfitForest: 'Forest',
+    outfitEmerald: 'Emerald',
+    outfitTeal: 'Teal',
+    outfitAzure: 'Azure',
+    outfitRoyal: 'Royal Blue',
+    outfitViolet: 'Violet',
+    outfitMagenta: 'Magenta',
+    outfitRose: 'Rose',
+    outfitOnyx: 'Onyx',
+    outfitIvory: 'Ivory',
+    outfitGilded: 'Gilded',
+    outfitBonewrought: 'Bonewrought',
+    outfitObsidian: 'Obsidian',
+    outfitVerdigris: 'Verdigris',
+    outfitBloodforged: 'Bloodforged',
+    // Makeup. Each row is a strip of colour swatches whose first entry is OFF,
+    // so these names are the accessible label for a chip that shows a colour
+    // rather than text.
+    lipstick: 'Lipstick',
+    blush: 'Blush',
+    eyeshadow: 'Eyeshadow',
+    makeupNone: 'None',
+    shadeRose: 'Rose',
+    shadeCoral: 'Coral',
+    shadeRuby: 'Ruby',
+    shadeBerry: 'Berry',
+    shadePlum: 'Plum',
+    shadeNude: 'Nude',
+    shadePeach: 'Peach',
+    shadeWarm: 'Warm',
+    shadeMauve: 'Mauve',
+    shadeSmoke: 'Smoke',
+    shadeBronze: 'Bronze',
+    shadeTeal: 'Teal',
+    // Rolls everything EXCEPT the body, which the player has just chosen.
+    randomize: 'Randomize Look',
+    randomizeShort: 'Random',
+    // Not part of the character: it shows the same character wearing the set's
+    // helmet, so the face they are picking can be checked against it.
+    helmPreview: 'Show Helmet',
+    // The customizer's fourth category tab: the finishing pass (makeup,
+    // jewellery, helm preview) rather than a body part. Body / Face / Hair
+    // reuse the keys above.
+    style: 'Style',
+    // Restores the default look for the chosen body; the counterpart to
+    // randomize above, and like it, it keeps the body selection.
+    resetLook: 'Reset Look',
+    resetShort: 'Reset',
+    browFlat: 'Flat',
+    browArched: 'Arched',
+    browThin: 'Thin',
+    browBushy: 'Bushy',
+    browWorried: 'Worried',
+    browSharp: 'Sharp',
+    browRound: 'Round',
+    eyeRound: 'Round',
+    eyeAlmond: 'Almond',
+    eyeNarrow: 'Narrow',
+    eyeWide: 'Wide',
+    eyeSharp: 'Sharp',
+    eyeDroopy: 'Droopy',
+    eyeSleepy: 'Sleepy',
+    eyeWideset: 'Wide-set',
+    eyeCat: 'Cat',
+    eyeDoe: 'Doe',
+    earRound: 'Round',
+    earPointed: 'Pointed',
+    earSmall: 'Small',
+    earWide: 'Wide',
+    hairBald: 'Bald',
+    hairBuzz: 'Buzz Cut',
+    hairCrew: 'Clipper Cut',
+    hairCrewcut: 'Textured Crew Cut',
+    hairPixie: 'Pixie Cut',
+    hairSweptpixie: 'Swept Pixie',
+    hairQuiff: 'Brushed-Up Quiff',
+    hairSidepart: 'Classic Side Part',
+    hairMessy: 'Messy Short Spikes',
+    hairCurlycap: 'Short Curly Cap',
+    hairPompadour: 'Short Pompadour',
+    hairSweptback: 'Medium Swept-Back',
+    hairFauxhawk: 'Faux Hawk',
+    hairMohawk: 'Full Mohawk',
+    hairTopknot: 'Top Knot',
+    hairWarriorbraid: 'Warrior Braid',
+    hairHighbun: 'High Bun',
+    hairLowbun: 'Low Bun',
+    hairBraidcrown: 'Braided Crown',
+    hairAfro: 'Rounded Afro',
+    hairCurlyafro: 'Curly Afro',
+    hairChinbob: 'Chin-Length Bob',
+    hairBluntbangs: 'Blunt Bangs Bob',
+    hairWavybob: 'Wavy Bob',
+    hairAsymbob: 'Asymmetric Bob',
+    hairCurtains: 'Curtain Middle Part',
+    hairHighpony: 'High Ponytail',
+    hairSidepony: 'Side Ponytail',
+    hairHalfbun: 'Half-Up Bun',
+    hairLayered: 'Shoulder-Length Layered',
+    hairCurls: 'Loose Curls',
+    hairLongwavy: 'Long Wavy',
+    hairLongcenterpart: 'Long Center Part',
+    hairLongpart: 'Long Straight Centre Part',
+    hairMullet: 'Chunky Mullet',
+    hairTwinbraids: 'Twin Braids',
+    hairLowpony: 'Low Ponytail',
+    hairFantasybraid: 'Fantasy Braid',
+    beardNone: 'None',
+    beardStubble: 'Stubble',
+    beardScruff: 'Scruff',
+    beardMutton: 'Mutton Chops',
+    beardGoatee: 'Goatee',
+    beardChinpuff: 'Chin Puff',
+    beardStache: 'Moustache',
+    beardHorseshoe: 'Horseshoe',
+    beardShortbox: 'Boxed',
+    beardFull: 'Full',
+    beardVikingb: 'Braided',
+    beardWizard: 'Wizard',
+    beardStubbleBeard: 'Heavy Stubble',
+    browNone: 'None',
+    browSoft: 'Soft',
+    browThick: 'Thick',
+    browAngled: 'Angled',
+    earrings: 'Earrings',
+    jewelMaterial: 'Jewellery Material',
+    jewelDefault: 'As Forged',
+    jewelGold: 'Gold',
+    jewelSilver: 'Silver',
+    jewelBone: 'Bone',
+    jewelIron: 'Iron',
+    jewelCopper: 'Copper',
+    jewelBronze: 'Bronze',
+    jewelObsidian: 'Obsidian',
+    jewelJade: 'Jade',
+    jewelAmethyst: 'Amethyst',
+    jewelRuby: 'Ruby',
+    jewelPearl: 'Pearl',
+    jewelTurquoise: 'Turquoise',
+    earNone: 'None',
+    earStud: 'Stud',
+    earHoop: 'Hoop',
+    // Fantasy jewellery. The last three sets also carry a face piercing, which
+    // is why they are named for the whole look rather than for the earring.
+    earBone: 'Bone Charm',
+    earBonehoop: 'Bone Ring',
+    earMoon: 'Moon Crescent',
+    earMoonstar: 'Moonlit Star',
+    earRunic: 'Rune Stone',
+    earChain: 'Beaded Drop',
+    earSeptum: 'Nose Ring',
+    earWarden: "Warden's Iron",
+    earCuff: 'Cuff',
+    earFeather: 'Feather',
     class: 'Class',
     name: 'Name',
     chromaOption: 'Chroma {n}',
@@ -1111,7 +1327,6 @@ export const en = {
   yumi: {
     bracket3: 'Yumi 3v3',
     bracket5: 'Yumi 5v5',
-    enterQueue: 'Join Protect Yumi!',
     queue: {
       join: 'You join the Protect Yumi queue. Guard your familiar…',
       leave: 'You leave the Protect Yumi queue.',
@@ -1149,10 +1364,6 @@ export const en = {
   },
   fiesta: {
     bracket: 'Fiesta',
-    enterQueue: 'Join the Fiesta!',
-    practice: '🎉 Practice vs Bots',
-    practiceNote:
-      'Offline practice: spawns 3 AI bots and queues you for a 2v2 Fiesta. Click again to stop.',
     banner: {
       wave: 'WAVE {wave}/{total} — CHOOSE AN AUGMENT!',
       augmentGained: 'Augment gained: {name}!',

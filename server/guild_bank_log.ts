@@ -1,13 +1,15 @@
-// The guild bank ACTIVITY LOG read path: the officer-visible projection of one
-// guild's append-only bank_ledger rows.
+// The guild bank ACTIVITY LOG read path: the guild-visible projection of one
+// guild's append-only bank_ledger rows (readable by EVERY member since the
+// v0.35 member read-only view; the gate is the bank's own membership gate).
 //
-// WHY IT EXISTS. The guild bank is officer-only, so any officer can quietly
-// drain shared property. Every op already writes a bank_ledger row with the
-// actor, the op, the item, the counts and both copper sides; the knowledge has
-// always been there and only the operator could see it. Making officer actions
-// visible to the guild is the social trust mechanism that makes officer-only
-// withdrawals defensible in the first place, so this read is a FEATURE of the
-// permission model, not a reporting extra.
+// WHY IT EXISTS. Editing the guild bank is officer-only, so any officer can
+// quietly drain shared property. Every op already writes a bank_ledger row with
+// the actor, the op, the item, the counts and both copper sides; the knowledge
+// has always been there and only the operator could see it. Making officer
+// actions visible to the whole guild is the social trust mechanism that makes
+// officer-only withdrawals defensible in the first place, so this read is a
+// FEATURE of the permission model, not a reporting extra, and widening it to
+// the members whose pooled goods the officers steward strengthens it.
 //
 // WHAT IS DELIBERATELY WITHHELD, and why each one:
 //   - `escrow_deficit` and `counterparty_orphan` are DIAGNOSTIC anomaly rows,
@@ -29,8 +31,8 @@
 //     BankSlot). So the entry carries actor null and the client renders
 //     "An administrator removed ..." with no guildmate implicated.
 //
-// CACHING. The answer is IDENTICAL for every officer of a guild, so a
-// per-request query would multiply one read by the number of officers with the
+// CACHING. The answer is IDENTICAL for every member of a guild, so a
+// per-request query would multiply one read by the number of members with the
 // window open, on a keep-forever table, for zero added information. It rides
 // the repo's cached-read seam (server/cached_read.ts): per-guild TTL +
 // single-flight (two officers racing a cold window share ONE query) +
@@ -99,8 +101,9 @@ const ANONYMOUS_OPS: ReadonlySet<string> = new Set<GuildBankLogOp>(['admin_purge
  *  a query (once per TTL, no matter how many of them are looking). */
 export const GUILD_BANK_LOG_CACHE_TTL_MS = 30_000;
 
-/** Entry bound. Guild bank logs are read only by officers standing at a banker
- *  with the window open, so the live set is tiny; the cap is what keeps a long
+/** Entry bound. Guild bank logs are read only by guild members standing at a
+ *  banker with the window open (the cap counts GUILDS, not readers, so the
+ *  member-wide audience does not move it), so the live set is tiny; the cap is what keeps a long
  *  uptime with churn from turning the map into an unbounded per-guild residue
  *  (the grows-without-bound defect server/CLAUDE.md forbids). Past the cap the
  *  coldest guild is evicted and its next read costs one extra query. */

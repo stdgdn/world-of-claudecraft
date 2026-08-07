@@ -1,10 +1,14 @@
 // Guild tab pane painter for the Bank window (#bank-window): renders the
-// officer-plus pooled guild bank (treasury, slot grid, gold deposit/withdraw,
+// guild pooled bank (treasury, slot grid, gold deposit/withdraw,
 // expansion purchase; for an UNOPENED bank the treasury plus the purse-paid
 // open-the-bank row) from the structured GuildBankViewModel
-// (guild_bank_view.ts). The pure core decides slot flags (dormant, unknown),
-// capacity, action enablement and the buy panel; this thin consumer renders
-// that and wires every action back through the IWorldGuildBank facet commands.
+// (guild_bank_view.ts). Every guild member sees the pane; a plain member's
+// view is READ-ONLY (the model's readOnly flag): gold buttons disabled, the
+// officer action rows absent, slot clicks inert (inspect-only), and an
+// always-visible note saying who can act. The pure core decides slot flags
+// (dormant, unknown), capacity, action enablement and the buy panel; this thin
+// consumer renders that and wires every action back through the
+// IWorldGuildBank facet commands.
 // It is composed by BankWindow (bank_window.ts), which owns the tab strip, the
 // open/close lifecycle, the refresh signature, and the prompt-dialog chrome
 // (injected here as installPromptDialog so the guild prompts share the exact
@@ -28,6 +32,7 @@
 import { audio } from '../game/audio';
 import { ITEMS } from '../sim/data';
 import type { IWorld } from '../world_api';
+import { bagInstanceGlyphKind } from './bag_instance_glyph_view';
 import { showQuantityPrompt } from './bank_quantity_prompt';
 import { itemDisplayName } from './entity_i18n';
 import { esc } from './esc';
@@ -37,6 +42,7 @@ import {
   buildGuildBankView,
   clampGoldAmount,
   coinFieldsToCopper,
+  type GuildBankBuySlotsModel,
   type GuildBankOpenModel,
   type GuildBankSlotModel,
   type GuildBankTreasuryModel,
@@ -47,6 +53,7 @@ import {
 } from './guild_bank_view';
 import { formatMoney, formatNumber, t } from './i18n';
 import { QUALITY_COLOR } from './icons';
+import { INSTANCE_GLYPH_ARIA_KEYS, instanceGlyphMarkHtml } from './item_instance_glyph_mark';
 import { knownItemDef } from './known_item';
 import type { PainterHostPresentation } from './painter_host';
 import { tSim } from './sim_i18n';
@@ -120,10 +127,20 @@ export class GuildBankTab {
     return this.view;
   }
 
+  // Whether the LAST paint of this pane was read-only, or null before any
+  // paint (and again after close). The one edge detector behind the read-only
+  // note's announcement: a demotion mid-view must be VOICED (the surface
+  // changed under the viewer), while a steady read-only pane repainting on
+  // another member's op echo must not re-announce the same sentence, and every
+  // repaint re-inserts the node, so a permanently-live region would.
+  private prevReadOnly: boolean | null = null;
+
   /** Reset to the bank contents. BankWindow calls this on close so a reopened
-   *  bank never starts on the log (and never refetches it unasked). */
+   *  bank never starts on the log (and never refetches it unasked); the
+   *  read-only edge detector resets with it so a reopening never announces. */
   resetView(): void {
     this.view = 'contents';
+    this.prevReadOnly = null;
   }
 
   /**
@@ -165,6 +182,10 @@ export class GuildBankTab {
    *  per paint, never two). */
   renderInto(root: HTMLElement, model: GuildBankViewModel): void {
     if (model.kind === 'hidden') return; // raced null: BankWindow falls back next paint
+    // The DEMOTION edge (editable on the last paint, read-only on this one):
+    // the only paint whose read-only note carries live-region semantics.
+    const announceReadOnly = model.readOnly && this.prevReadOnly === false;
+    this.prevReadOnly = model.readOnly;
     // A REAL role=tabpanel, unlike the personal pane, which mounts flat. This
     // pane holds a nested tab list, and an inner tablist with no owning panel
     // reads to a screen reader as a second unrelated top-level strip that came
@@ -189,9 +210,18 @@ export class GuildBankTab {
     }
     if (model.kind === 'unopened') {
       // No rung bought yet: the treasury works from day one, the item store
-      // does not exist until an officer opens it from their own purse.
+      // does not exist until an officer opens it from their own purse. A
+      // read-only viewer gets no open row (model.open is null): the read-only
+      // note lands BEFORE the treasury so its disabled buttons are explained
+      // before they are met, and a second line names the unopened state the
+      // missing open row would otherwise have carried (without it the member
+      // pane reads as empty or broken rather than not-yet-opened).
+      if (model.readOnly) {
+        el.appendChild(this.buildNote('hudChrome.bank.guildReadOnlyNote', announceReadOnly));
+      }
       el.appendChild(this.buildTreasuryRow(model.treasury));
-      el.appendChild(this.buildOpenRow(model.open));
+      if (model.readOnly) el.appendChild(this.buildNote('hudChrome.bank.guildUnopenedNote'));
+      if (model.open) el.appendChild(this.buildOpenRow(model.open));
       return;
     }
     const capacity = document.createElement('div');
@@ -201,6 +231,11 @@ export class GuildBankTab {
     capacity.textContent = t('hudChrome.bank.capacity', { used, total });
     capacity.setAttribute('aria-label', t('hudChrome.bank.guildCapacityAria', { used, total }));
     el.appendChild(capacity);
+    // The read-only note lands BEFORE the treasury row (assistive tech should
+    // meet the explanation before the disabled controls it explains).
+    if (model.readOnly) {
+      el.appendChild(this.buildNote('hudChrome.bank.guildReadOnlyNote', announceReadOnly));
+    }
     el.appendChild(this.buildTreasuryRow(model.treasury));
     if (model.hasDormant) {
       // The dormant legend is always-visible TEXT (never tooltip-only, the
@@ -217,7 +252,32 @@ export class GuildBankTab {
     this.fillGrid(grid, model);
     scroll.appendChild(grid);
     el.appendChild(scroll);
-    el.appendChild(this.buildBuyRow(model));
+    // A read-only viewer gets no expansion footer (model.buy is null): buying
+    // slots is an officer action and the note above already says so.
+    if (model.buy) el.appendChild(this.buildBuyRow(model.buy));
+  }
+
+  // The read-only legends: always-visible TEXT (never tooltip-only, the
+  // mobile rule; the dormant note's precedent), so a member is told up front
+  // why every mutating affordance is missing instead of discovering dead
+  // buttons. Its OWN class (not a second `gbank-dormant-note`), so the
+  // dormant-legend selector stays unambiguous in tests and styling.
+  // `live` is true ONLY on the demotion-edge paint (see prevReadOnly): that
+  // one insert carries role=status + polite aria-live so the mid-view rank
+  // change is voiced (the gold prompt errorLine precedent), while steady
+  // read-only repaints stay silent divs and never re-announce.
+  private buildNote(
+    key: 'hudChrome.bank.guildReadOnlyNote' | 'hudChrome.bank.guildUnopenedNote',
+    live = false,
+  ) {
+    const note = document.createElement('div');
+    note.className = 'gbank-readonly-note';
+    if (live) {
+      note.setAttribute('role', 'status');
+      note.setAttribute('aria-live', 'polite');
+    }
+    note.textContent = t(key);
+    return note;
   }
 
   // The Contents / Log sub-strip: the shared WAI-ARIA tab strip core, the same
@@ -381,7 +441,7 @@ export class GuildBankTab {
     }
     // NO filter/sort layer and NO unknown-id drop: every slot renders at its
     // wire index, dormant ones visibly distinct (the carried-forward line).
-    for (const slot of model.slots) grid.appendChild(this.buildCell(slot));
+    for (const slot of model.slots) grid.appendChild(this.buildCell(slot, model.readOnly));
     for (let i = 0; i < model.emptyCells; i++) {
       const cell = document.createElement('div');
       cell.className = 'bank-item empty';
@@ -390,7 +450,7 @@ export class GuildBankTab {
     }
   }
 
-  private buildCell(slot: GuildBankSlotModel): HTMLElement {
+  private buildCell(slot: GuildBankSlotModel, readOnly: boolean): HTMLElement {
     const item = knownItemDef(ITEMS, slot.itemId);
     const cell = document.createElement('button');
     cell.type = 'button';
@@ -401,22 +461,32 @@ export class GuildBankTab {
     const dormantClass = slot.dormant ? ' gbank-dormant' : '';
     const itemName = item ? itemDisplayName(item) : t('hudChrome.bank.guildUnknownItem');
     const count = this.fmt(slot.count);
+    // Per-copy corner marks share the bags/personal-bank helper so a guild-banked
+    // masterwork keeps its seal. Dormant lock mark sits top-right; instance glyphs
+    // sit top-left, so both can coexist without colliding.
+    const glyphKind = bagInstanceGlyphKind(slot.instance);
+    const instanceMark = instanceGlyphMarkHtml(glyphKind);
     if (slot.known && item) {
       cell.className = `bank-item q-${slot.qualityKey}${dormantClass}`;
       const qColor = QUALITY_COLOR[slot.qualityKey] ?? QUALITY_DEFAULT_COLOR;
       cell.style.setProperty('--bank-slot-quality', qColor);
       const mark = slot.dormant ? `<span class="gbank-dormant-mark">${svgIcon('lock')}</span>` : '';
-      cell.innerHTML = `${this.deps.itemIcon(item)}<span class="bank-count">${
+      cell.innerHTML = `${this.deps.itemIcon(item)}${instanceMark}<span class="bank-count">${
         slot.showCount ? esc(t('itemUi.bags.stackCount', { count })) : ''
       }</span>${mark}`;
       this.deps.attachTooltip(cell, () => {
+        // A read-only viewer's tooltip advertises NO withdraw affordance: the
+        // click is inert for them, and a hint that lies is worse than none.
+        // The dormant hint stays (it explains the lock mark, an item fact).
         const hint = slot.dormant
           ? `<div class="tt-sub">${esc(t('hudChrome.bank.guildDormantHint'))}</div>`
-          : `<div class="tt-sub">${esc(t('hudChrome.bank.withdrawHint'))}</div>${
-              slot.showCount && !slot.instance
-                ? `<div class="tt-sub">${esc(t('hudChrome.bank.withdrawPartialHint'))}</div>`
-                : ''
-            }`;
+          : readOnly
+            ? ''
+            : `<div class="tt-sub">${esc(t('hudChrome.bank.withdrawHint'))}</div>${
+                slot.showCount && !slot.instance
+                  ? `<div class="tt-sub">${esc(t('hudChrome.bank.withdrawPartialHint'))}</div>`
+                  : ''
+              }`;
         return `${this.deps.itemTooltip(item, slot.instance)}${hint}`;
       });
     } else {
@@ -426,43 +496,63 @@ export class GuildBankTab {
       cell.className = `bank-item gbank-unknown${dormantClass}`;
       cell.innerHTML = `<span class="gbank-unknown-label">${esc(
         t('hudChrome.bank.guildUnknownItem'),
-      )}</span><span class="bank-count">${
+      )}</span>${instanceMark}<span class="bank-count">${
         slot.showCount ? esc(t('itemUi.bags.stackCount', { count })) : ''
       }</span>`;
       this.deps.attachTooltip(cell, () => {
         const hint = slot.dormant
           ? t('hudChrome.bank.guildDormantHint')
-          : t('hudChrome.bank.withdrawHint');
-        return `<div class="tt-title">${esc(t('hudChrome.bank.guildUnknownItem'))}</div><div class="tt-sub">${esc(slot.itemId)}</div><div class="tt-sub">${esc(hint)}</div>`;
+          : readOnly
+            ? null
+            : t('hudChrome.bank.withdrawHint');
+        return `<div class="tt-title">${esc(t('hudChrome.bank.guildUnknownItem'))}</div><div class="tt-sub">${esc(slot.itemId)}</div>${
+          hint === null ? '' : `<div class="tt-sub">${esc(hint)}</div>`
+        }`;
       });
     }
+    // Dormant wording outranks the per-copy flag (the lock is the action fact);
+    // otherwise a masterwork / signed / enchanted copy announces itself. The
+    // guild pane keeps the KNOWN key family even for an unknown id: itemName is
+    // already the localized unknown-item label here (the label carries the
+    // unknown fact, the raw id lives in the tooltip), where the personal bank
+    // announces the raw id via the UNKNOWN_ siblings instead. Deliberate; the
+    // guild marker suite pins the exact strings.
     cell.setAttribute(
       'aria-label',
       slot.dormant
         ? t('hudChrome.bank.guildDormantAria', { item: itemName, count })
-        : t('itemUi.bags.itemAria', { item: itemName, count }),
+        : t(glyphKind ? INSTANCE_GLYPH_ARIA_KEYS[glyphKind] : 'itemUi.bags.itemAria', {
+            item: itemName,
+            count,
+          }),
     );
+    // A read-only cell stays FOCUSABLE (the tooltip inspection is the point)
+    // but must not announce as actionable: its click is inert by design, and
+    // a control that promises action and does nothing is worse than one that
+    // says it is disabled (the treasury buttons' disabled precedent).
+    if (readOnly) cell.setAttribute('aria-disabled', 'true');
     cell.addEventListener('click', (ev) => {
       if (this.deps.consumePeek()) {
         this.deps.hideTooltip();
         return;
       }
-      this.onSlotClick(slot, ev.shiftKey);
+      this.onSlotClick(slot, ev.shiftKey, readOnly);
     });
     return cell;
   }
 
   // Plain click withdraws the whole stack (a dormant slot round-trips to the
   // sim's localized refusal); shift-click on a splittable non-dormant stack
-  // opens the quantity prompt. The pure guildBankSlotAction decides which.
-  private onSlotClick(slot: GuildBankSlotModel, shift: boolean): void {
+  // opens the quantity prompt; a read-only viewer's click does nothing (the
+  // pure core answers 'none'). The pure guildBankSlotAction decides which.
+  private onSlotClick(slot: GuildBankSlotModel, shift: boolean, readOnly: boolean): void {
     const live = this.deps.world().guildBankInfo?.slots[slot.slotIndex];
     // Identity guard, the prompt-submit rule applied to the PLAIN click too: in
     // a multi-officer book another officer's op can shift indices a tick before
     // this click sends, and withdrawing the WRONG item is worse than a no-op
     // (the next repaint shows the moved grid).
     if (live && live.itemId !== slot.itemId) return;
-    const action = guildBankSlotAction(live, slot.slotIndex, shift, slot.dormant);
+    const action = guildBankSlotAction(live, slot.slotIndex, shift, slot.dormant, readOnly);
     if (action.kind === 'withdraw') {
       this.deps.world().guildBankWithdraw(action.slotIndex);
       audio.click();
@@ -661,10 +751,9 @@ export class GuildBankTab {
   // or a maxed label. Never disabled on affordability (family precedent: the
   // sim refuses with its own localized line); an unaffordable price carries a
   // visible text marker on top of the styling class, never color alone.
-  private buildBuyRow(model: GuildBankViewModel & { kind: 'guild' }): HTMLElement {
+  private buildBuyRow(buy: GuildBankBuySlotsModel): HTMLElement {
     const row = document.createElement('div');
     row.className = 'bank-buy-row gbank-buy-row';
-    const buy = model.buy;
     if (buy.maxed || buy.nextPrice === null) {
       const maxed = document.createElement('span');
       maxed.className = 'bank-buy-maxed';

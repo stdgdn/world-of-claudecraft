@@ -52,6 +52,7 @@ function guildInfo(over: Partial<GuildBankInfo> = {}): GuildBankInfo {
     capacity: 12,
     purchasedSlots: 24,
     nextExpansionPrice: GUILD_BANK_RUNG_PRICES[1],
+    canEdit: true,
     ...over,
   };
 }
@@ -196,7 +197,7 @@ describe('guild_bank_window: no magic values (the bank_window twin)', () => {
 });
 
 describe('guild tab visibility', () => {
-  it('renders NO tab strip while guildBankInfo is null (member / offline)', () => {
+  it('renders NO tab strip while guildBankInfo is null (guildless / offline / away)', () => {
     const h = harness(null);
     h.window.open();
     expect(h.root.querySelector('.bank-tabs')).toBeNull();
@@ -1057,5 +1058,147 @@ describe('guild_bank_window: the activity log view', () => {
     h.world.guildBankInfo = guildInfo({ treasury: 99_000 });
     h.window.refreshIfChanged();
     expect((document.activeElement as HTMLElement)?.dataset.focusKey).toBe('gbank:view:log');
+  });
+});
+
+describe('the READ-ONLY member pane (canEdit false)', () => {
+  const memberInfo = (over: Partial<GuildBankInfo> = {}) => guildInfo({ canEdit: false, ...over });
+
+  it('a member gets the Guild tab and the full contents, read-only', () => {
+    const h = harness(memberInfo({ treasury: 60_000, slots: [{ itemId: 'sword', count: 1 }] }));
+    h.window.open();
+    clickGuildTab(h);
+    // The pane renders: treasury readout, grid, the slot itself.
+    expect(h.root.querySelector('.gbank-treasury .money-inline')?.textContent).toBe('60000');
+    expect(h.root.querySelectorAll('.bank-grid .bank-item:not(.empty)')).toHaveLength(1);
+    // Every mutating affordance is withheld: both gold buttons disabled, no
+    // expansion footer, and the always-visible read-only note says why.
+    const buttons = Array.from(h.root.querySelectorAll('.gbank-gold-btn')) as HTMLButtonElement[];
+    expect(buttons).toHaveLength(2);
+    expect(buttons.every((b) => b.disabled)).toBe(true);
+    expect(h.root.querySelector('.gbank-buy-row')).toBeNull();
+    expect(h.root.querySelector('.gbank-readonly-note')?.textContent).toBe(
+      'Only guild officers can make changes to the guild bank.',
+    );
+  });
+
+  it('a member slot click dispatches NOTHING (plain and shift both inert)', () => {
+    const h = harness(memberInfo({ slots: [{ itemId: plainId, count: 5 }] }));
+    h.window.open();
+    clickGuildTab(h);
+    const cell = h.root.querySelector('.bank-grid .bank-item') as HTMLElement;
+    cell.click();
+    cell.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+    expect(h.calls.filter((c) => c.startsWith('guildBankWithdraw'))).toEqual([]);
+    // No split prompt either.
+    expect(document.querySelector('.gbank-quantity-prompt')).toBeNull();
+  });
+
+  it('a member cell tooltip advertises no withdraw affordance', () => {
+    // plainId: a real splittable def, so the OFFICER arm below renders BOTH
+    // hints and the member arm's absence is decisively the read-only gate.
+    const h = harness(memberInfo({ slots: [{ itemId: plainId, count: 5 }] }));
+    h.window.open();
+    clickGuildTab(h);
+    const tooltip = h.tooltips.map((fn) => fn()).join('');
+    // The exact English hint literals (the suite runs under the en catalog):
+    // neither the plain nor the partial withdraw affordance may show.
+    expect(tooltip).not.toContain('Click to withdraw');
+    expect(tooltip).not.toContain('Shift-click to withdraw a partial amount');
+    // Positive control: the same slot under an officer DOES advertise both,
+    // so the absence above is the read-only arm, not a hint that never renders.
+    const officer = harness(guildInfo({ slots: [{ itemId: plainId, count: 5 }] }));
+    officer.window.open();
+    clickGuildTab(officer);
+    const officerTooltip = officer.tooltips.map((fn) => fn()).join('');
+    expect(officerTooltip).toContain('Click to withdraw');
+    expect(officerTooltip).toContain('Shift-click to withdraw a partial amount');
+  });
+
+  it('the member UNOPENED pane names the state: treasury + both notes, never the open row', () => {
+    const h = harness(memberInfo({ capacity: 0, purchasedSlots: 0, nextExpansionPrice: 90_000 }));
+    h.window.open();
+    clickGuildTab(h);
+    expect(h.root.querySelector('.gbank-treasury')).not.toBeNull();
+    expect(h.root.querySelector('.gbank-open-row')).toBeNull();
+    // Two legend lines: why the pane is inert, and what state the bank is in
+    // (the officer pane says "unopened" through the open row this viewer does
+    // not get; without this line the member pane reads as broken).
+    const notes = Array.from(h.root.querySelectorAll('.gbank-readonly-note')).map(
+      (n) => n.textContent,
+    );
+    expect(notes).toEqual([
+      'Only guild officers can make changes to the guild bank.',
+      'The guild bank has not been opened yet.',
+    ]);
+  });
+
+  it('a member slot cell is focusable but announces aria-disabled; an officer cell does not', () => {
+    const h = harness(memberInfo({ slots: [{ itemId: plainId, count: 5 }] }));
+    h.window.open();
+    clickGuildTab(h);
+    const cell = h.root.querySelector('.bank-grid .bank-item') as HTMLButtonElement;
+    // Focusable (tooltip inspection is the point), but announced inert: the
+    // click dispatches nothing, and a control that promises action it will
+    // not take is the accessibility bug this pins against.
+    expect(cell.disabled).toBe(false);
+    expect(cell.getAttribute('aria-disabled')).toBe('true');
+    const officer = harness(guildInfo({ slots: [{ itemId: plainId, count: 5 }] }));
+    officer.window.open();
+    clickGuildTab(officer);
+    const officerCell = officer.root.querySelector('.bank-grid .bank-item') as HTMLButtonElement;
+    expect(officerCell.getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('guildTabActive stays FALSE for a member: bag clicks never arm the guild deposit', () => {
+    const h = harness(memberInfo());
+    h.window.open();
+    clickGuildTab(h);
+    expect(h.window.guildTabActive).toBe(false);
+  });
+
+  it('the read-only note announces ONLY on the demotion edge, never on steady repaints', () => {
+    // First paint as a member: informational, not an event; no live region.
+    const h = harness(memberInfo({ treasury: 60_000 }));
+    h.window.open();
+    clickGuildTab(h);
+    const first = h.root.querySelector('.gbank-readonly-note');
+    expect(first?.getAttribute('role')).toBeNull();
+    expect(first?.getAttribute('aria-live')).toBeNull();
+    // Promotion, then demotion mid-view: the surface changed under the viewer,
+    // so THIS paint's note is a polite status (the gold-prompt errorLine
+    // precedent) and screen readers hear the rank change.
+    h.world.guildBankInfo = guildInfo({ treasury: 60_000 });
+    h.window.refreshIfChanged();
+    h.world.guildBankInfo = memberInfo({ treasury: 60_000 });
+    h.window.refreshIfChanged();
+    const onEdge = h.root.querySelector('.gbank-readonly-note');
+    expect(onEdge?.getAttribute('role')).toBe('status');
+    expect(onEdge?.getAttribute('aria-live')).toBe('polite');
+    // A steady read-only repaint (another member's op echoed): silent again.
+    h.world.guildBankInfo = memberInfo({ treasury: 70_000 });
+    h.window.refreshIfChanged();
+    const steady = h.root.querySelector('.gbank-readonly-note');
+    expect(steady?.textContent).toBe('Only guild officers can make changes to the guild bank.');
+    expect(steady?.getAttribute('role')).toBeNull();
+  });
+
+  it('a canEdit flip mid-open repaints: promotion enables, demotion disables', () => {
+    const h = harness(memberInfo({ treasury: 60_000 }));
+    h.window.open();
+    clickGuildTab(h);
+    expect(h.window.guildTabActive).toBe(false);
+    // Promotion lands on the mirror (the re-stamp echoes through the snapshot).
+    h.world.guildBankInfo = guildInfo({ treasury: 60_000 });
+    h.window.refreshIfChanged();
+    expect(h.window.guildTabActive).toBe(true);
+    expect(h.root.querySelector('.gbank-readonly-note')).toBeNull();
+    const buttons = Array.from(h.root.querySelectorAll('.gbank-gold-btn')) as HTMLButtonElement[];
+    expect(buttons.some((b) => !b.disabled)).toBe(true);
+    // And back: the demote repaints to the locked pane.
+    h.world.guildBankInfo = memberInfo({ treasury: 60_000 });
+    h.window.refreshIfChanged();
+    expect(h.window.guildTabActive).toBe(false);
+    expect(h.root.querySelector('.gbank-readonly-note')).not.toBeNull();
   });
 });

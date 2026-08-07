@@ -100,13 +100,6 @@ const PROVEN_SAFE_BASES: ProvenSafeBase[] = [
     why: 'the offline inspector copy of the same clamped twinkles shader',
   },
   {
-    file: 'src/render/water.ts',
-    base: 'sunAlign',
-    sites: 3,
-    anchor: /float sunAlign = max\(dot\(reflect\(-uSunDir, N\), V\), 0\.0\)/,
-    why: 'sunAlign is itself a max(..., 0.0), reused by the three sun-lobe powers',
-  },
-  {
     file: 'src/render/worn_stone.ts',
     base: 'wornAxis',
     sites: 1,
@@ -126,15 +119,20 @@ const PROVEN_SAFE_BASES: ProvenSafeBase[] = [
  *  SET with counts, not as a floor: a floor sitting under the real total is what
  *  lets a whole directory leave the scan while the guard stays green. */
 const POW_SITES_PER_FILE: Record<string, number> = {
+  'src/render/battleground_lantern_fx.ts': 1,
+  'src/render/battleground_rune_vfx.ts': 3,
+  'src/render/battleground_ward.ts': 1,
   'scripts/asset_pipeline/weapon_vfx.js': 4,
   'src/render/ability_vfx/rings.ts': 1,
   'src/render/ability_vfx/shells.ts': 1,
+  // the armour-dye sRGB<->linear pair (bases clamped with max(c, 0))
+  'src/render/characters/assets.ts': 2,
   'src/render/dungeon.ts': 1,
   'src/render/foliage_shader_core.ts': 1,
   'src/render/pbr_fragment_shader.ts': 1,
   'src/render/post_output_grade.ts': 1,
   'src/render/sky.ts': 1,
-  'src/render/water.ts': 4,
+  'src/render/water.ts': 1,
   'src/render/weapon_vfx.ts': 4,
   'src/render/worn_stone.ts': 1,
 };

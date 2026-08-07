@@ -121,7 +121,11 @@ export function parseVisualUrls(src) {
   };
   // visualKey: { url: `${DIR}/file.glb` ... } blocks, including nested attach
   // urls; attribute each url between this key and the next to the key.
-  const keyRe = /^\s{2}([a-z0-9_]+):\s*\{/gm;
+  // A def may be WRAPPED in a helper call (`player_warrior: swims({ ... })`,
+  // which layers the shared swim strokes on), so the opening brace can sit
+  // behind an identifier and a paren. Missing that does not just drop the key:
+  // its urls get attributed to whichever key was matched before it.
+  const keyRe = /^\s{2}([a-z0-9_]+):\s*(?:[A-Za-z_$][\w$]*\()?\{/gm;
   const keys = [...src.matchAll(keyRe)].map((m) => ({ key: m[1], at: m.index }));
   for (let i = 0; i < keys.length; i++) {
     const end = keys[i + 1]?.at ?? src.length;

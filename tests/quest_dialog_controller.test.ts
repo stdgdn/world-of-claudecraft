@@ -95,6 +95,7 @@ function harness(
   const openChronicles = vi.fn();
   const openVendor = vi.fn();
   const openHeroicVendor = vi.fn();
+  const openWarfareVendor = vi.fn();
   const openMarket = vi.fn();
   const openDelveBoard = vi.fn();
   const openValeCup = vi.fn();
@@ -131,6 +132,7 @@ function harness(
     openChronicles,
     openVendor,
     openHeroicVendor,
+    openWarfareVendor,
     openMarket,
     openDelveBoard,
     openValeCup,
@@ -162,6 +164,7 @@ function harness(
     openChronicles,
     openVendor,
     openHeroicVendor,
+    openWarfareVendor,
     openMarket,
     openDelveBoard,
     openValeCup,
@@ -507,6 +510,50 @@ describe('QuestDialogController', () => {
     cardMaster.controller.open(45);
     cardMaster.element.querySelector<HTMLButtonElement>('[data-card-duel]')?.click();
     expect(cardMaster.openCardDuel).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the generic goods row BESIDE the WARFARE shop row, with distinct labels and routes', () => {
+    // Round-2 review finding: the gossip menu suppressed hasVendor for a
+    // warfareVendor-flagged NPC, which silently took selling and buyback away
+    // at FURY, a shipped NPC that already had a generic goods row. Both rows
+    // ship now; what the suppression was really avoiding (two buttons wearing
+    // the same "Browse Goods" label) is fixed by the shop row's own keys.
+    const flaggedId = Object.values(NPCS).find((definition) => definition.warfareVendor)?.id;
+    if (!flaggedId) throw new Error('warfare vendor fixture not found');
+    const flagged = npc(60, flaggedId);
+    flagged.vendorItems = ['minor_healing_potion'];
+    const both = harness(flagged);
+    both.controller.open(flagged.id);
+
+    const goods = both.element.querySelector<HTMLButtonElement>('[data-vendor]');
+    const shop = both.element.querySelector<HTMLButtonElement>('[data-warfare-shop]');
+    expect(goods, 'the generic goods row survives at a flagged NPC').not.toBeNull();
+    expect(shop, 'the WARFARE shop row').not.toBeNull();
+    const npcName = `npc:${flaggedId}`;
+    expect(goods?.textContent).toContain(t('questUi.dialog.browseGoods'));
+    expect(shop?.textContent).toContain(t('hudChrome.warfareShop.gossipOption'));
+    expect(goods?.textContent).not.toBe(shop?.textContent);
+    expect(goods?.getAttribute('aria-label')).toBe(
+      t('questUi.dialog.browseGoodsAria', { name: npcName }),
+    );
+    expect(shop?.getAttribute('aria-label')).toBe(
+      t('hudChrome.warfareShop.gossipOptionAria', { name: npcName }),
+    );
+    expect(goods?.getAttribute('aria-label')).not.toBe(shop?.getAttribute('aria-label'));
+
+    // The shop row routes to the sectioned window and nowhere else.
+    shop?.click();
+    expect(both.openWarfareVendor).toHaveBeenCalledWith(flagged.id, both.trapOpener);
+    expect(both.openVendor).not.toHaveBeenCalled();
+
+    // A fresh dialog, because the click above closed this one: the goods row
+    // still routes to the ORDINARY vendor window (selling and buyback).
+    const generic = harness(npc(61, flaggedId));
+    generic.entity.vendorItems = ['minor_healing_potion'];
+    generic.controller.open(61);
+    generic.element.querySelector<HTMLButtonElement>('[data-vendor]')?.click();
+    expect(generic.openVendor).toHaveBeenCalledWith(61, generic.trapOpener);
+    expect(generic.openWarfareVendor).not.toHaveBeenCalled();
   });
 
   it("hands the successor window the DIALOG TRAP's own opener, not the in-dialog button (WCAG 2.4.3)", () => {

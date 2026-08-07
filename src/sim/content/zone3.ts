@@ -14,8 +14,9 @@ import type {
   ZoneDef,
   ZonePropsDef,
 } from '../types';
-import { FERAL } from './items';
+import { FERAL, HUNTER_ONLY } from './items';
 import { MOUNT_RACE_COURSE, STABLE_HORSE_TEMPLATE_ID, STABLE_PADDOCK } from './mounts';
+import { FURY_STOCK } from './pvp_honor';
 
 export const ZONE3_ZONE: ZoneDef = {
   id: 'thornpeak_heights',
@@ -168,6 +169,9 @@ export const ZONE3_MOBS: Record<string, MobTemplate> = {
       { itemId: 'cragmaw_prowlboots', chance: 0.3 },
       { itemId: 'cragward_pauldrons', chance: 0.25 },
       { itemId: 'cragthorn_greatstaff', chance: 0.2 },
+      // Independent roll like every other piece on this table, so the quiver
+      // costs the existing drops nothing.
+      { itemId: 'cragmaw_huntquiver', chance: 0.25 },
     ],
     scale: 1.3,
     color: 0x6e6453,
@@ -1286,6 +1290,50 @@ export const ZONE3_NPCS: Record<string, NpcDef> = {
     heroicVendor: true,
     greeting:
       'Proof of the heroic depths buys the finest rings and pendants in Highwatch. Show me your marks.',
+  },
+  // The WARFARE quartermaster, standing in the Highwatch quartermaster row a few
+  // paces west of Quartermaster Vex. Every WARFARE piece requires level 20 and
+  // Highwatch is the level-18-to-20 hub, so the stock finally sits where its
+  // buyers are; FURY keeps the identical list in Eastbrook Vale as a mirror
+  // (ONE canonical stock, two placements, never a duplicated item table).
+  //
+  // `dynamic: true` plus the reserved entity id in src/sim/pvp/
+  // warfare_quartermaster.ts are BOTH required: the generic world-init loop
+  // allocates ids by iterating the merged NPC table in insertion order, and
+  // zone 3 NPCs are spread early, so a plain insertion would shift the id of
+  // every NPC, camp mob and object created after it and red every parity
+  // golden. The loop skips a dynamic def, and the Sim ctor spawns him
+  // explicitly through the rng-free findSafePos path instead.
+  //
+  // Being an honor vendor is emergent from the stock carrying priceHonor: the
+  // buy path, range gate, balance debit and gossip row are all generic over any
+  // non-empty vendorItems, so the PURCHASE path needs no flag and no new
+  // plumbing. The sectioned WARFARE shop WINDOW is the one thing that does: it
+  // gates on the NpcDef `warfareVendor` flag (isWarfareVendorNpc in
+  // src/ui/hud/vendor/warfare_vendor_view.ts), deliberately a flag rather than
+  // the hard-coded id the Heroic Quartermaster uses, so a third placement costs
+  // one line rather than a widened constant. FURY carries the same flag: the two
+  // sell the identical stock and must present identically.
+  warmarshal_draven_kole: {
+    id: 'warmarshal_draven_kole',
+    name: 'Warmarshal Draven Kole',
+    title: 'Master of the Warfare Stores',
+    // Inside the hub radius (Highwatch is centred on 0,660 with radius 20), five
+    // yards west-north-west of Vex and six from both Bree and the bursar, which
+    // is the four-to-six yard spacing the rest of the row already runs at. The
+    // authored point is clear of every solid collider (the physics sweep checks
+    // the AUTHORED point, not the safe-position-nudged one) and far enough from
+    // the apothecary station and the Thornpeak Cairns that no station prop or
+    // headstone is vetoed out of existence by his NPC spot.
+    pos: { x: -11, z: 669 },
+    facing: 2.26, // atan2(dx, dz) toward the square at (0, 660)
+    color: 0x7d2f3f, // deep war-crimson steel, off every tint the visual manifest reserves
+    questIds: [],
+    vendorItems: [...FURY_STOCK],
+    dynamic: true,
+    warfareVendor: true,
+    greeting:
+      'Honor is the only coin I take, and the Warfare stores are mine to guard. Earn your rank on the field and I will armor you for the next one.',
   },
   loremaster_caddis: {
     id: 'loremaster_caddis',
@@ -2478,6 +2526,20 @@ export const ZONE3_ITEMS: Record<string, ItemDef> = {
     stats: { armor: 44, agi: 5, sta: 3 },
     sellValue: 340,
   },
+  cragmaw_huntquiver: {
+    id: 'cragmaw_huntquiver',
+    name: 'Cragmaw Huntquiver',
+    kind: 'held_offhand',
+    slot: 'offhand',
+    quality: 'rare',
+    // The quiver ladder's early-Thornpeak rung, off the same beast that already
+    // anchors the zone's agi-leather line (Huntcord above, Prowlboots): Old
+    // Cragmaw (level 14) -> item level 17, offhand budget 7. Fills the long
+    // stretch between Mogger's uncommon (item level 7) and Korzul's rare (23).
+    stats: { agi: 4, sta: 3 },
+    sellValue: 240,
+    requiredClass: HUNTER_ONLY,
+  },
   // --- Level-20 endgame loot: Korzul (5-player Gravewyrm Sanctum) and Nythraxis
   // (10-player raid). Every piece below is NORMALIZED to the stat budget its item
   // level earns (see src/sim/item_level.ts): item level = level 20 + quality bonus,
@@ -3409,6 +3471,38 @@ export const ZONE3_ITEMS: Record<string, ItemDef> = {
     // The caster weapon-proficiency group list (CASTER_WEAPON_CLASSES); kind
     // held_offhand equips by the literal requiredClass.
     requiredClass: ['mage', 'priest', 'warlock', 'shaman', 'paladin', 'druid'],
+  },
+  gravewyrm_bone_quiver: {
+    id: 'gravewyrm_bone_quiver',
+    name: 'Gravewyrm Bone Quiver',
+    kind: 'held_offhand',
+    slot: 'offhand',
+    quality: 'rare',
+    // Korzul the Gravewyrm (level 20) -> item level 23, stats on the exact
+    // offhand budget, primaryStatBudget(23, rare, offhand) = 10. The mid rung of
+    // the quiver ladder, between Mogger's uncommon and the raid epic; agi/sta is
+    // the hunter identity the nighttalon leather set already carries.
+    stats: { agi: 6, sta: 4 },
+    sellValue: 360,
+    requiredClass: HUNTER_ONLY,
+  },
+  direfang_quiver: {
+    id: 'direfang_quiver',
+    name: 'Direfang Quiver',
+    kind: 'held_offhand',
+    slot: 'offhand',
+    quality: 'epic',
+    // The hunter counterpart to wraithfire_orb, off the same raid boss and on
+    // the same line: primaryStatBudget(29, epic, offhand) = 15. Setless, despite
+    // sharing the Direfang display name with the nighttalon set pieces, so it
+    // cannot shift that set's bonus thresholds.
+    stats: { agi: 9, sta: 6 },
+    // Physical ranged DPS identity: Hit, matching the nighttalon leather set
+    // (attacks miss, so Hit is the throughput rating); never crit-first like the
+    // caster orb, whose heals are not resisted.
+    hitRating: 20,
+    sellValue: 12000,
+    requiredClass: HUNTER_ONLY,
   },
   // --- vendor food & drink (Quartermaster Bree) ---
   trail_hardtack: {

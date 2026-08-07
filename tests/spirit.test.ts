@@ -552,6 +552,8 @@ describe('spirit: stale movement intent does not survive death (#1651)', () => {
       strafeLeft: false,
       strafeRight: false,
       jump: false,
+      dive: false,
+      surface: false,
     });
     // ticking with the stale input gone, the ghost stays put
     const posAfterRelease = { ...p.pos };

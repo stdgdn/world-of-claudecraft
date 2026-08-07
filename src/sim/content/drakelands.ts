@@ -397,6 +397,7 @@ export const DRAKELANDS_MOBS: Record<string, MobTemplate> = {
     ],
     scale: 1.15,
     color: 0xb07040,
+    componentTags: ['hide', 'fang'],
   },
   // The brood-mother of the whole Drakemaw clutch, gold as a coal about to
   // catch against her green-scaled children (q_dk_matriarch_of_the_maw).
@@ -787,9 +788,18 @@ export const DRAKELANDS_OBJECTS: GroundObjectDef[] = [
     name: 'Scorched Supply Crate',
     // Strewn where the burned wagon broke apart along the Wyrmwatch -> Cinder
     // Dunes road.
+    // The second crate sat at x 360, which is exactly CASTLE.wx0, the Last
+    // Keep's west curtain wall centerline: once the keep was authored over this
+    // stretch of road, castleLift raised that crate to the wall-walk (walkAbs
+    // 13, 7yd over the bailey floor), where a player following the road has
+    // nothing to see. Credit was never the gate: interaction.ts measures
+    // dist2d, so height is ignored and someone standing at the wall foot could
+    // still have taken it blind. What the stranding cost was FINDING it. It now
+    // lies on the open ground just west of the wall foot, still on the road
+    // line. tests/ground_object_placement.test.ts guards the whole family.
     positions: [
       { x: 372, z: 1968 },
-      { x: 360, z: 2014 },
+      { x: 355, z: 2013 },
       { x: 348, z: 2046 },
       { x: 332, z: 2094 },
     ],

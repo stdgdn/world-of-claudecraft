@@ -7,6 +7,7 @@ import {
 } from '../game/graphics_rebuild_core';
 import { safeStartupGraphicsPreset } from '../game/startup_graphics_safety';
 import { EFFECTS_QUALITY_LOW_CUTOFF } from '../game/ui_effects_profile';
+import { attachBiomeHaze } from './biome_haze_field';
 import { FAR_ANIM_RANGE_SCALE_MAX } from './crowd_lod';
 import { gfxAaPolicy } from './gfx_aa_policy_core';
 import { applyGfxOverridesFromSearch } from './gfx_override_core';
@@ -25,8 +26,9 @@ import { isSoftwareRendererName } from './software_renderer';
 //      (headless screenshot verification: stills render slowly but correctly)
 //   3. an explicit persisted graphics preset -> that tier
 //   4. no persisted preset (first boot / inconclusive detection) -> DEVICE-AWARE default via
-//      resolveDefaultGraphicsPreset (recognized weak/software -> low, strong desktop -> high/ultra,
-//      anything unrecognized -> medium), so the 3D tier matches the medium data-fx-level fallback
+//      resolveDefaultGraphicsPreset (any touch device -> low, recognized weak/software -> low,
+//      strong desktop -> high/ultra, anything unrecognized -> medium), so the 3D tier matches the
+//      medium data-fx-level fallback on the desktop path that still lands there
 
 export type GfxTier = 'low' | 'medium' | 'high' | 'ultra' | 'insane';
 
@@ -50,7 +52,11 @@ export function gfxTierAtLeast(tier: GfxTier, floor: GfxTier): boolean {
 // v20: High uses the reduced fixed-layer profile and the composer governor
 // consumes truthful logical-frame draw stats. Fleet dashboards segment these
 // semantics from the v19 relaxed scenery contract.
-export const GFX_CONFIG_VERSION = 20;
+// v21: round-12 per-effect Advanced dials (AA / bloom / AO / view distance /
+// water / character detail) join the derived profile: vistaTier and waterTier
+// become explicit settings fields and the post-chain per-effect flags follow
+// the dials rather than the effectsQuality bundle alone.
+export const GFX_CONFIG_VERSION = 21;
 
 export const GFX_BUCKET_IDS = [
   'resolution',
@@ -100,6 +106,14 @@ export interface GfxRuntimeHints {
   effectsQuality?: number;
   shadowQuality?: number;
   surfaceDetail?: number;
+  antiAliasing?: number;
+  bloomQuality?: number;
+  ambientOcclusion?: number;
+  viewDistance?: number;
+  waterQuality?: number;
+  characterDetail?: number;
+  dynamicLights?: number;
+  particleEffects?: number;
 }
 
 export interface GfxCapabilities {
@@ -203,6 +217,8 @@ export interface GfxSettings {
   readonly nativeIosMemoryProfile: boolean;
   /** Global cap for inactive skinned character rigs retained for reuse. */
   readonly maxPooledCharacterVisuals: number;
+  /** Global cap for inactive ground-object views (harvest nodes, loot, quest pickups) retained for reuse. */
+  readonly maxPooledObjects: number;
   /**
    * Linear range multiplier for the animated far character band (`crowd_lod.ts`):
    * how much further than the articulated band a rig keeps animating at a low
@@ -212,6 +228,21 @@ export interface GfxSettings {
    * back to 1 on their own, so this is only the per-tier ceiling.
    */
   readonly farCharacterAnimScale: number;
+  /**
+   * The tier the far-field decision (`farFieldPolicy`) runs at: the profile
+   * tier everywhere except the Advanced preset, whose View Distance dial
+   * remaps it level by level. The capability laws (sprites need standard
+   * materials, the full foliage kit and an unconstrained memory ceiling; the
+   * vista needs sprites) still apply on top, so a constrained profile keeps
+   * its classic fog wall whatever this says.
+   */
+  readonly vistaTier: GfxTier;
+  /**
+   * The tier the camera-anchored water height field plans against
+   * (`waterFieldPlan`): the profile tier everywhere except the Advanced
+   * preset, whose Water Quality dial remaps it level by level.
+   */
+  readonly waterTier: GfxTier;
 }
 
 export interface GfxProfile {
@@ -1023,16 +1054,46 @@ function settingsFor(tier: GfxTier, hints?: Partial<GfxRuntimeHints>): GfxSettin
     constrainedMemory,
     nativeIosMemoryProfile,
     tightMemory: tightMemoryProfile,
+    // Every OTHER budget in this function falls back through constrainedMemory (the
+    // cross-platform touch/coarse-pointer/narrow-viewport/deviceMemory detector, see
+    // maxPointLights above) before reaching its desktop default; this one used to jump
+    // straight from the two narrow iOS profiles to POSITIVE_INFINITY, so any Android
+    // browser or native shell, and any iOS session that never stamped tightMemory, kept
+    // every despawned mob/NPC CharacterVisual (and its per-instance Skeleton + GPU
+    // bone-matrix DataTexture) forever: visualPool is keyed per template+color+scale, so
+    // roaming through a zone with any per-mob variance mints new keys continuously and
+    // never reuses, never shrinks. Bounded to a working set a bit above the crowd_lod
+    // "soft" articulated-rig band (CROWD_LOD_SOFT_RIGS) so ordinary reuse still avoids the
+    // GPU skeleton re-upload hitch pooling exists for, without growing without bound.
     maxPooledCharacterVisuals: tightMemoryProfile
       ? 4
       : nativeIosMemoryProfile
         ? 6
-        : Number.POSITIVE_INFINITY,
+        : constrainedMemory
+          ? 24
+          : Number.POSITIVE_INFINITY,
+    // The ground-object reuse pool (harvest nodes, loot piles, quest pickups) had NO cap at
+    // all on any platform, not even the two narrow iOS memory profiles: every distinct item
+    // template a player interacted with stayed retained (Group/Object3D graph, never GPU
+    // geometry/material, those are shared per-item template references) for the rest of the
+    // session. Professions gathering in particular streams through many distinct nodes in a
+    // few minutes, so this was unbounded, progressive growth on exactly the cadence the
+    // mobile-disconnect reports described. Bounded on the same constrained-device tiers as
+    // maxPooledCharacterVisuals above; desktop keeps the historical unbounded pool.
+    maxPooledObjects: tightMemoryProfile
+      ? 4
+      : nativeIosMemoryProfile
+        ? 6
+        : constrainedMemory
+          ? 24
+          : Number.POSITIVE_INFINITY,
     // Extra articulated rigs are skinning + draw-call cost, so the phone-class
     // memory profiles and the low tier (which includes software GL) opt out and
     // keep the straight-to-frozen far LOD.
     farCharacterAnimScale:
       tier === 'low' || constrainedMemory || nativeIosMemoryProfile ? 1 : FAR_ANIM_RANGE_SCALE_MAX,
+    vistaTier: tier,
+    waterTier: tier,
   };
   if (hints?.graphicsPreset === PRESET_ADVANCED) {
     // The Advanced custom mix maps each persisted sub-setting onto the SAME
@@ -1131,6 +1192,84 @@ function settingsFor(tier: GfxTier, hints?: Partial<GfxRuntimeHints>): GfxSettin
     else if (shadowLevel === 1)
       settings = { ...settings, shadowMap: 2560, terrainCastShadows: false };
     else if (shadowLevel === 3) settings = { ...settings, shadowMap: 8192 };
+    // Per-effect switches (round 12), layered AFTER Effects & Lighting and
+    // authoritative over its per-effect writes: Effects & Lighting stays the
+    // post-CHAIN master (its Low arm sheds the composer, and with no composer
+    // there is no pass to run these on, so the whole block is skipped there),
+    // while these dials own the individual passes. A pre-round-12 mix stores
+    // no values for them, so each dial's absent default DERIVES from the
+    // stored effectsQuality and reproduces the old bundle byte for byte. The
+    // AA dial can only DISABLE what the device policy grants (a memory-tight
+    // profile whose policy is 'none' never gains a tail pass from it), and
+    // Ambient Occlusion Full is how an Advanced mix reaches the full-res AO
+    // the ultra/insane tiers run.
+    if (settings.composer) {
+      const aoDial =
+        hints.ambientOcclusion ?? (effectsValue >= EFFECTS_QUALITY_LOW_CUTOFF ? 0.5 : 0);
+      const bloomDial = hints.bloomQuality ?? (effectsValue >= 0.75 ? 1 : 0);
+      const aaDial = hints.antiAliasing ?? (effectsValue >= 0.75 ? 1 : 0);
+      settings = {
+        ...settings,
+        ao: aoDial >= 0.25,
+        aoFullRes: aoDial >= 0.75,
+        bloom: bloomDial >= 0.5,
+        smaa: aaPolicy.postAa === 'smaa' && aaDial >= 0.5,
+      };
+    }
+    // View Distance / Water Quality: whole-tier remaps for the two subsystems
+    // that plan against a tier (the far-field policy still applies its own
+    // capability laws on top). Level 0/1/2/3 climbs low / medium / high, then
+    // the top rung each ladder actually distinguishes: the vista's insane 8yd
+    // grid (high and ultra share one plan), the water field's ultra 128 cells.
+    const vistaLevel = levelOf(hints.viewDistance ?? 1);
+    settings = {
+      ...settings,
+      vistaTier:
+        vistaLevel === 0
+          ? 'low'
+          : vistaLevel === 1
+            ? 'medium'
+            : vistaLevel === 2
+              ? 'high'
+              : 'insane',
+    };
+    const waterLevel = levelOf(hints.waterQuality ?? 1);
+    settings = {
+      ...settings,
+      waterTier:
+        waterLevel === 0
+          ? 'low'
+          : waterLevel === 1
+            ? 'medium'
+            : waterLevel === 2
+              ? 'high'
+              : 'ultra',
+    };
+    // Character Detail: Off collapses distant rigs straight to the frozen far
+    // mesh; On keeps the base profile's animated far band (never raised above
+    // the profile ceiling, so constrained devices stay collapsed either way).
+    if ((hints.characterDetail ?? 1) < 0.5) settings = { ...settings, farCharacterAnimScale: 1 };
+    // Dynamic Lights: Low keeps the constrained-device point-light pool
+    // (fewer live torches and night lights), never raised above the base.
+    if ((hints.dynamicLights ?? 1) < 0.5)
+      settings = { ...settings, maxPointLights: Math.min(settings.maxPointLights, 3) };
+    // Particle Effects: narrow the governable vfx budget band. The governor's
+    // machinery is untouched; Medium stops it raising past the tier baseline,
+    // Low pins the band at its floor. Purely a band clamp, so a tier retune
+    // flows through unchanged.
+    const vfxLevel = hints.particleEffects ?? 1;
+    if (vfxLevel < 0.75) {
+      const band = settings.bucketBands.vfx;
+      const vfx =
+        vfxLevel < 0.25
+          ? { ...band, baseline: band.min, max: band.min }
+          : { ...band, max: band.baseline };
+      settings = {
+        ...settings,
+        bucketBands: { ...settings.bucketBands, vfx },
+        bucketBaselines: { ...settings.bucketBaselines, vfx: vfx.baseline },
+      };
+    }
   }
   return applyGfxOverridesFromSearch(settings, hints?.search ?? '');
 }
@@ -1231,6 +1370,14 @@ function runtimeHints(): GfxRuntimeHints {
     effectsQuality: storedNumericSetting('effectsQuality'),
     shadowQuality: storedNumericSetting('shadowQuality'),
     surfaceDetail: storedNumericSetting('surfaceDetail'),
+    antiAliasing: storedNumericSetting('antiAliasing'),
+    bloomQuality: storedNumericSetting('bloomQuality'),
+    ambientOcclusion: storedNumericSetting('ambientOcclusion'),
+    viewDistance: storedNumericSetting('viewDistance'),
+    waterQuality: storedNumericSetting('waterQuality'),
+    characterDetail: storedNumericSetting('characterDetail'),
+    dynamicLights: storedNumericSetting('dynamicLights'),
+    particleEffects: storedNumericSetting('particleEffects'),
   };
 }
 
@@ -1334,9 +1481,11 @@ export function classifyGpuRenderer(name: string | undefined): GpuClass {
 
 /**
  * The device-appropriate graphics preset (1 low .. 4 ultra) for a player who has NOT chosen one,
- * so a weak phone is not stuck on a tier it cannot run and a strong desktop is not capped below
- * what it can drive. MEDIUM (2) is the deliberate fallback whenever the signals are inconclusive
- * (the product call: a safe middle the runtime auto-governor can climb from). Pure function of
+ * so a phone is not stuck on a tier it cannot enter the world at and a strong desktop is not
+ * capped below what it can drive. EVERY touch device resolves to LOW (see the isMobile branch:
+ * the entry-time memory ceiling, not the frame rate, is what mobile is protected from). MEDIUM
+ * (2) is the deliberate DESKTOP fallback whenever the signals are inconclusive (the product
+ * call: a safe middle the runtime auto-governor can climb from). Pure function of
  * static device hints only (GPU name, deviceMemory, hardwareConcurrency, touch/coarse/narrow);
  * reads NO FPS governor and runs ONCE on first boot, so it never fights the runtime governor (the
  * two-controller rule). main.ts persists the result over the medium default so the 3D
@@ -1347,11 +1496,24 @@ export function classifyGpuRenderer(name: string | undefined): GpuClass {
  *
  * Grounded in the standard adaptive-quality practice (detect-gpu name tiering + web.dev adaptive
  * loading), first-match-wins. CRITICAL: deviceMemory + hardwareConcurrency may only RAISE a tier
- * or break a tie, NEVER pull one down. Safari caps hardwareConcurrency (2 on iOS, 8 on macOS) and
- * Safari + Firefox omit deviceMemory entirely (Chromium-only, clamped, max ~8), so a flagship
- * iPhone reports cores=2 / mem=undefined: a low-count down-rank would wrongly bucket it low. The
- * recognized GPU class sets the floor; a masked/unknown name lands on MEDIUM. Ultra is gated
- * behind a recognized strong-desktop GPU (a masked name cannot reach it).
+ * or break a tie, NEVER pull one down FOR THIS CAPABILITY LADDER. Safari caps hardwareConcurrency
+ * (2 on iOS, 8 on macOS) and Safari + Firefox omit deviceMemory entirely (Chromium-only, clamped,
+ * max ~8), so a thin count is routinely a REPORTING artifact rather than a weak machine: a Safari
+ * DESKTOP must not be down-ranked for it. The recognized GPU class sets the floor; a masked/unknown
+ * desktop name lands on MEDIUM. Ultra is gated behind a recognized strong-desktop GPU (a masked
+ * name cannot reach it) and is desktop-only, since every touch device takes the LOW branch first.
+ *
+ * That blanket mobile floor SUBSUMES the reported-deviceMemory floor #2955 added here (mobile with
+ * a reported mem <= TIGHT_MEMORY_MAX_GB), which is why no separate memory check remains: its cases
+ * are a strict subset and resolve to the same PRESET_LOW. Its evidence is the corroborating
+ * argument for going blanket rather than a reason to keep two ladders. GPU capability and total RAM
+ * really are separate axes (a common mid-range Android pairs a decent GPU with 3-4 GB of system
+ * RAM), the world's baseline texture/geometry residency alone can cross the OS per-tab ceiling
+ * during ordinary play at HIGH, and players reported exactly that as "randomly disconnects / dumped
+ * back to login no matter the network." The narrow floor could only ever fire where deviceMemory is
+ * REPORTED, so it never covered iOS at all (Safari omits deviceMemory, leaving mem undefined) even
+ * though phone-class WebKit is where the process kill is most brutal. Touch alone is the signal
+ * that covers both.
  */
 export function resolveDefaultGraphicsPreset(hints: GfxRuntimeHints): number {
   const gpu = classifyGpuRenderer(hints.gpuRenderer);
@@ -1366,19 +1528,29 @@ export function resolveDefaultGraphicsPreset(hints: GfxRuntimeHints): number {
     (cores !== undefined && cores >= AMPLE_LOGICAL_CORES);
 
   if (gpu === 'software' || gpu === 'weak') return PRESET_LOW;
-  if (gpu === 'strongDesktop' && !isMobile) return ampleOrUnknownMem ? PRESET_ULTRA : PRESET_HIGH;
-  // A strong/flagship GPU on a touch device: capped at HIGH (ultra is desktop-only) for thermals.
-  if (gpu === 'flagshipMobile' || (gpu === 'strongDesktop' && isMobile)) return PRESET_HIGH;
-  // Apple Silicon: an M-series iPad (touch) keeps the mobile HIGH cap above; an M-series Mac
-  // (non-touch) defaults to the safe middle. These SoCs can render high, but the thermally
-  // constrained MacBook form factor overheats and drains battery on a sustained ultra load, so
-  // medium is the right auto-default (the runtime governor can still climb; ultra stays a manual
-  // opt-in). Issue 1676.
-  if (gpu === 'appleSilicon') return isMobile ? PRESET_HIGH : PRESET_MEDIUM;
+  // EVERY touch device starts at LOW, whatever its GPU class reports. The tier the synchronous
+  // world-entry scene build runs at is what decides its peak memory footprint, and on phone-class
+  // WebKit crossing the per-process ceiling gets the tab's WebContent process killed with no
+  // error event (src/game/entry_crash_guard.ts). The previous mobile ladder (flagship or
+  // Apple-silicon touch to HIGH, masked/unknown phone to MEDIUM) entered above that ceiling often
+  // enough that the crash-recovery banner became a routine part of joining on a phone. Mobile now
+  // starts at the floor and CLIMBS only by an explicit player choice in Options; the runtime
+  // governor still moves render scale within the tier, and safeStartupGraphicsPreset still caps a
+  // stored ultra/insane choice on iOS. Detection can no longer pick a mobile tier that has to be
+  // walked back down one crash at a time.
+  if (isMobile) return PRESET_LOW;
+  if (gpu === 'strongDesktop') return ampleOrUnknownMem ? PRESET_ULTRA : PRESET_HIGH;
+  // A flagship MOBILE GPU on a device reporting no touch at all (an Android TV box, desktop
+  // device emulation): not a phone by the check above, so it keeps its historical HIGH.
+  if (gpu === 'flagshipMobile') return PRESET_HIGH;
+  // Apple Silicon Macs (touch devices took the LOW branch above): these SoCs can render high, but
+  // the thermally constrained MacBook form factor overheats and drains battery on a sustained
+  // ultra load, so medium is the right auto-default (the runtime governor can still climb; ultra
+  // stays a manual opt-in). Issue 1676.
+  if (gpu === 'appleSilicon') return PRESET_MEDIUM;
   if (gpu === 'midIntegrated' || gpu === 'midMobile') return PRESET_MEDIUM;
   if (
     gpu === 'unknown' &&
-    !isMobile &&
     mem !== undefined &&
     mem >= AMPLE_DEVICE_MEMORY_GIB &&
     cores !== undefined &&
@@ -1652,6 +1824,11 @@ export const gfxInternalsForTest = {
 export const sharedUniforms = {
   uTime: { value: 0 },
   uRimBoost: { value: 1 },
+  /** (player x, player z, dense blade-carpet radius): the paint-free ring the
+   *  terrain splat reads so painted blades never show under the real carpet.
+   *  Radius 0 (a tier with no carpet) leaves the paint everywhere. Written by
+   *  the renderer each frame beside uTime. */
+  uCarpetRing: { value: new THREE.Vector3(0, 0, 0) },
 };
 
 // The one sun. Everything that needs the sun's position/direction (key light,
@@ -1722,6 +1899,14 @@ export function addRimGlow(mat: THREE.Material): void {
     `pbr-rim-reuse|${previousCompileSource}|${previousProgramKey()}`;
 }
 
+/** True when addRimGlow already patched this exact material instance. A
+ *  Material.clone() is NOT the same instance and never carries the hook (clone
+ *  copies userData but drops onBeforeCompile), which is what
+ *  material_clone_hooks.ts re-attaches. */
+export function hasRimGlow(mat: THREE.Material): boolean {
+  return rimGlowMaterials.has(mat);
+}
+
 // Material factory: dedupes by (color|maps|flags) so hundreds of small box
 // meshes share a few dozen programs/uniform sets. Standard on high/ultra,
 // Lambert on low.
@@ -1768,6 +1953,10 @@ export function surfaceMat(opts: SurfaceMatOpts): THREE.Material {
         side: opts.side ?? THREE.FrontSide,
       });
   if (opts.rim && GFX.standardMaterials) addRimGlow(mat);
+  // Every surfaceMat surface takes the distant-zone air (compile-time no-op
+  // on tiers without a field): props and buildings at range must haze with
+  // the ground under them or the effect reads as nothing.
+  attachBiomeHaze(mat);
   matCache.set(key, mat);
   return mat;
 }

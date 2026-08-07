@@ -49,7 +49,14 @@ function maxOutdoorFogFar(): number {
 
 function shippedBiomeFog(): { biome: string; near: number; far: number }[] {
   const maxFar = maxOutdoorFogFar();
-  const block = /BIOME_FOG[^{]*\{([\s\S]*?)\n {2}\};/.exec(rendererSrc);
+  // Anchored on the DECLARATION, not the first mention: `BIOME_FOG` is used
+  // thousands of lines above the table it names, and an unanchored match started
+  // there and ran to whichever `\n  };` came first. That terminator was the real
+  // table's only by luck, and a class property closing earlier (a bound arrow
+  // field) silently moved it in front of the table, leaving this sweep parsing a
+  // 230 KB body with no fog row in it. `[^=]*` crosses the Record<...> type, whose
+  // own brace is what kept the anchor off the declaration in the first place.
+  const block = /static BIOME_FOG[^=]*=\s*\{([\s\S]*?)\n {2}\};/.exec(rendererSrc);
   expect(block, 'BIOME_FOG table not found in renderer.ts').not.toBe(null);
   const body = (block as RegExpExecArray)[1];
   const rows = [...body.matchAll(/(\w+):\s*\{[^}]*near:\s*([\d.]+),\s*far:\s*([\w.]+)/g)].map(
@@ -346,6 +353,26 @@ describe('foliage LOD: the real-model and impostor windows cover the world', () 
     const rock = windowFor({ centerDist: 200, maxDist: LOD_HIGH.rockFar, distanceScale: 0.5 });
     expect(bucketVisible(rock)).toBe(false);
     expect(bucketVisible({ ...rock, distanceScale: 1 })).toBe(true);
+  });
+});
+
+describe('foliage LOD: the shadow clones no longer take this window', () => {
+  // They key on the key light's own orthographic shadow volume instead
+  // (src/render/foliage_shadow_core.ts, tests/foliage_shadow_core.test.ts).
+  // Nothing here may grow a shadow-specific arm again: the near-edge probe this
+  // module briefly carried for them inflated their kept radius by a bucket
+  // bounding radius, ~290u on the shipped ~500x240u slabs.
+  const lodSrc = readFileSync(new URL('../src/render/foliage_lod.ts', import.meta.url), 'utf8');
+
+  it('keeps bucketVisible camera-keyed on the bucket centre for every row', () => {
+    expect(lodSrc).not.toContain('maxFromNearEdge');
+    expect(lodSrc).toContain('if (w.centerDist < minCap || w.centerDist >= maxCap) return false;');
+  });
+
+  it('routes the shadow rows to the light-volume core', () => {
+    const foliageSrc = readFileSync(new URL('../src/render/foliage.ts', import.meta.url), 'utf8');
+    expect(foliageSrc).toContain("from './foliage_shadow_core'");
+    expect(foliageSrc).toContain('shadowRowVisible(');
   });
 });
 

@@ -127,6 +127,17 @@ export const BIND_ACTIONS: BindAction[] = [
     defaults: ['KeyE'],
   },
   { id: 'jump', label: 'Jump', category: 'Movement', kind: 'held', defaults: ['Space'] },
+  // Swim down, the mirror of Jump's swim up. Ctrl is the one movement-hand key
+  // left unclaimed, and a HELD action matches the bare physical code, so a lone
+  // modifier drives it fine (only the rebinding CAPTURE ignores lone modifiers,
+  // so a player rebinding this must pick a non-modifier key).
+  {
+    id: 'dive',
+    label: 'Swim Down',
+    category: 'Movement',
+    kind: 'held',
+    defaults: ['ControlLeft'],
+  },
   {
     id: 'autorun',
     label: 'Toggle Autorun',
@@ -162,6 +173,17 @@ export const BIND_ACTIONS: BindAction[] = [
     category: 'Targeting',
     kind: 'edge',
     defaults: ['KeyF'],
+  },
+  {
+    // The deliberate Thornhollow Fields flag press (never a walk-over). The bare
+    // interact key also routes here inside a live match (main.ts), so this
+    // dedicated bind is the rebindable, always-explicit form on F's shifted
+    // layer (the thematically nearest key: it IS an interaction).
+    id: 'bgFlag',
+    label: 'Battleground Flag Action',
+    category: 'Targeting',
+    kind: 'edge',
+    defaults: ['Shift+KeyF'],
   },
   // Only acts while the Attack Move setting is on; shares its default key with
   // Turn Left intentionally, and only that key is reserved while active.
@@ -214,7 +236,7 @@ export const BIND_ACTIONS: BindAction[] = [
   },
   {
     id: 'arena',
-    label: 'Arena (Ashen Coliseum)',
+    label: 'PvP (Thornhollow Fields and Arenas)',
     category: 'Interface',
     kind: 'edge',
     defaults: ['KeyG'],
@@ -329,6 +351,15 @@ export const BIND_ACTIONS: BindAction[] = [
     category: 'Pet',
     kind: 'edge',
     defaults: ['Ctrl+Digit5'],
+  },
+  // Selects your own pet, the keyboard route to what clicking the pet frame does.
+  // Ctrl+6 continues the pet row (Ctrl+1..5 above) and collides with nothing.
+  {
+    id: 'targetPet',
+    label: 'Pet: Mark',
+    category: 'Pet',
+    kind: 'edge',
+    defaults: ['Ctrl+Digit6'],
   },
   // Action bar (slot 0 = Attack)
   ...SLOT_DEFAULTS.map(

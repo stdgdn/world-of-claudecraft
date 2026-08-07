@@ -143,13 +143,15 @@ describe('gfx override application', () => {
       ]),
     );
 
+    // Regenerated for the combined v21 profile controls and maxPooledObjects field. The staged
+    // vista and water tiers plus the bounded ground-object pool move every derived profile byte.
     expect(hashes).toEqual({
-      low: '42ed799774110700ab92986f9c91ca11eddf4dec10f283c840c8dceaa193678f',
-      medium: 'c050b1dcd93c42a1e3bb889d09d111a01843d40f3c2e6b18246fa29fa72df5f2',
-      high: '2c9f07d64a9bc6de9bef133b0fda15b78cf5b3caea3c1b663e2581acc4cb64a7',
-      ultra: 'a4d06e8812fb3d633004e6e0b7b0476d09fcea35bf5e4867a41c298844451345',
-      insane: 'f958af0c8455eb70663b7eb7298fc20d2508d1250897aa340eb57152b142e960',
-      advanced: 'a46ab9ada9e851a87cc5c54ce48650fbce8c704368b22d87bb6f1f21c4b8467e',
+      low: '4987a6b9a467580e2cb92a69c480991393c2c225ea15c34163d32c2ea1b79421',
+      medium: '631057f9ab877b911d9dc8871ce4618cdbe7e41834e138cdf8fca2ec65605c1a',
+      high: '8bae7a847914010b9c2628b83b71db75071473e4a0454fccc7f5995d99fb5c8c',
+      ultra: '6e4125654ebe9e92439a87a0025e8c2980261381f7519ed4e4151441f709663f',
+      insane: '9b8c9748c3c859e5f205ae1158ac78ed946cc334c0a430220805f35a99a49011',
+      advanced: 'c593310aac361378b53d43809c53c7c1f5f9947b811eea19e5ff0aab456e75e4',
     });
   });
 

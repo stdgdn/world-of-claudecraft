@@ -1303,6 +1303,7 @@ describe('guildBankInfoFor (the maybe(guildBank) stream read)', () => {
       capacity: 30,
       purchasedSlots: 30,
       nextExpansionPrice: 50_000, // rung-2 literal
+      canEdit: true, // officer-plus viewer
     });
     // Boundary clone: mutating the returned view never reaches the live book.
     if (!info) throw new Error('unreachable');
@@ -1328,18 +1329,25 @@ describe('guildBankInfoFor (the maybe(guildBank) stream read)', () => {
       capacity: 0,
       purchasedSlots: 0,
       nextExpansionPrice: 90_000, // the purse-paid opening price literal
+      canEdit: true, // officer-plus viewer
     });
   });
 
-  it('leader sees the bank; member sees null (the officer-plus gate)', () => {
+  it('every rank sees the bank; canEdit marks officer-plus (the two-gate split)', () => {
     expect(makeOfficerSim({ rank: 'leader' }).guildBankInfoFor(7_777_777)).toBeNull(); // unknown pid arm
     const leader = makeOfficerSim({ rank: 'leader' });
-    expect(leader.guildBankInfoFor(leader.playerId)).not.toBeNull();
+    expect(leader.guildBankInfoFor(leader.playerId)?.canEdit).toBe(true);
+    const officer = makeOfficerSim({ rank: 'officer' });
+    expect(officer.guildBankInfoFor(officer.playerId)?.canEdit).toBe(true);
+    // A plain member reads the SAME snapshot (the guild-wide view), with the
+    // edit verdict withheld: read-only, never null.
     const member = makeOfficerSim({ rank: 'member' });
-    expect(member.guildBankInfoFor(member.playerId)).toBeNull();
+    const info = member.guildBankInfoFor(member.playerId);
+    expect(info).not.toBeNull();
+    expect(info?.canEdit).toBe(false);
   });
 
-  it('goes null on walk-away, death, demotion, and leave (the stream transitions)', () => {
+  it('goes null on walk-away, death, and leave; a demotion keeps the stream and drops canEdit', () => {
     const sim = makeOfficerSim();
     expect(sim.guildBankInfoFor(sim.playerId)).not.toBeNull();
     // walk away, and back
@@ -1354,12 +1362,13 @@ describe('guildBankInfoFor (the maybe(guildBank) stream read)', () => {
     expect(sim.guildBankInfoFor(sim.playerId)).toBeNull();
     p.dead = false;
     expect(sim.guildBankInfoFor(sim.playerId)).not.toBeNull();
-    // demotion (the stale-rank re-stamp), and re-promotion
+    // demotion (the stale-rank re-stamp): still a member, so the stream stays
+    // and only the edit verdict flips; re-promotion restores it
     sim.setPlayerGuildMembership(sim.playerId, { guildId: GUILD_ID, rank: 'member' });
-    expect(sim.guildBankInfoFor(sim.playerId)).toBeNull();
+    expect(sim.guildBankInfoFor(sim.playerId)?.canEdit).toBe(false);
     sim.setPlayerGuildMembership(sim.playerId, { guildId: GUILD_ID, rank: 'officer' });
-    expect(sim.guildBankInfoFor(sim.playerId)).not.toBeNull();
-    // leave (stamp cleared)
+    expect(sim.guildBankInfoFor(sim.playerId)?.canEdit).toBe(true);
+    // leave (stamp cleared): no membership, no view at all
     sim.setPlayerGuildMembership(sim.playerId, null);
     expect(sim.guildBankInfoFor(sim.playerId)).toBeNull();
   });
@@ -1379,13 +1388,16 @@ describe('guildBankInfoFor (the maybe(guildBank) stream read)', () => {
 });
 
 describe('guild bank authorization: the rank allowlist and per-guild isolation', () => {
-  it('exactly leader and officer pass BOTH gates; every other rank fails closed', () => {
+  it('exactly leader and officer pass the OP gate; every rank passes the read, canEdit agrees', () => {
     // Swept over GUILD_RANKS itself, so a rank added to the ladder without
-    // revisiting the allowlist reddens here instead of silently gaining
-    // deposit, withdraw, and treasury-funded expansion purchase. The op gate
-    // and the info read are asserted TOGETHER: a drift between them is a
-    // phantom window (read yes, ops no) or a leak (ops yes, read no).
-    const ALLOWED: readonly GuildRank[] = ['leader', 'officer'];
+    // revisiting the edit allowlist reddens here instead of silently gaining
+    // deposit, withdraw, and treasury-funded expansion purchase. The op gate,
+    // the info read, and the snapshot's canEdit flag are asserted TOGETHER:
+    // the read is guild-wide (every stamped rank sees the bank), and canEdit
+    // must equal the op verdict rank for rank, because the client renders its
+    // read-only pane from that flag and a drift is a phantom window (canEdit
+    // yes, ops no) or a lying lock (ops yes, canEdit no).
+    const EDIT_ALLOWED: readonly GuildRank[] = ['leader', 'officer'];
     for (const rank of GUILD_RANKS) {
       const sim = makeOfficerSim({ rank, treasury: 100_000 });
       meta(sim).copper = 5_000;
@@ -1393,19 +1405,21 @@ describe('guild bank authorization: the rank allowlist and per-guild isolation',
       sim.drainEvents();
       sim.guildBankDepositGoldFor(sim.playerId, 1_000);
       const opAllowed = fingerprint(sim) !== before;
-      const readAllowed = sim.guildBankInfoFor(sim.playerId) !== null;
-      expect(opAllowed, `op gate for '${rank}'`).toBe(ALLOWED.includes(rank));
-      expect(readAllowed, `info read for '${rank}'`).toBe(ALLOWED.includes(rank));
-      expect(opAllowed, `gates agree for '${rank}'`).toBe(readAllowed);
+      const info = sim.guildBankInfoFor(sim.playerId);
+      expect(opAllowed, `op gate for '${rank}'`).toBe(EDIT_ALLOWED.includes(rank));
+      expect(info !== null, `info read for '${rank}'`).toBe(true);
+      expect(info?.canEdit, `canEdit agrees with the op gate for '${rank}'`).toBe(opAllowed);
     }
   });
 
-  it('a rank outside the allowlist fails CLOSED, not open (the future-rank arm)', () => {
+  it('a rank outside the edit allowlist fails CLOSED on ops (the future-rank arm)', () => {
     // Stands in for a rank added to the ladder later (an initiate tier). The
     // stamp normalizer only admits current GUILD_RANKS, so the future rank is
     // written straight onto the meta, exactly as a later normalizer would.
     // A denylist gate (`rank === 'member'`) would let this through: that is
-    // the regression this pins.
+    // the regression this pins. The VIEW is membership-gated, so the future
+    // rank still reads the bank, and reads it READ-ONLY: canEdit must fail
+    // closed too, never open.
     const sim = makeOfficerSim({ treasury: 100_000 });
     meta(sim).copper = 5_000;
     meta(sim).guildMembership = { guildId: GUILD_ID, rank: 'initiate' as GuildRank };
@@ -1414,7 +1428,7 @@ describe('guild bank authorization: the rank allowlist and per-guild isolation',
     sim.guildBankDepositGoldFor(sim.playerId, 1_000);
     expect(fingerprint(sim)).toBe(before);
     expect(hasErr(sim.drainEvents(), 'Only guild officers may use the guild bank.')).toBe(true);
-    expect(sim.guildBankInfoFor(sim.playerId)).toBeNull();
+    expect(sim.guildBankInfoFor(sim.playerId)?.canEdit).toBe(false);
   });
 
   it('an officer of one guild can never read or mutate another guild book', () => {
@@ -1483,7 +1497,7 @@ describe('guild bank authorization: the rank allowlist and per-guild isolation',
 });
 
 describe('guild bank ops: the stale-rank scenario and determinism', () => {
-  it('a demote landing mid-session gates the very next op and nulls the stream', () => {
+  it('a demote landing mid-session gates the very next op and drops canEdit on the stream', () => {
     const sim = makeOfficerSim({ treasury: 10_000 });
     meta(sim).copper = 5_000;
     sim.drainEvents();
@@ -1495,7 +1509,8 @@ describe('guild bank ops: the stale-rank scenario and determinism', () => {
     sim.guildBankDepositGoldFor(sim.playerId, 1_000);
     expect(book(sim).treasury).toBe(11_000); // the NEXT op is already refused
     expect(hasErr(sim.drainEvents(), 'Only guild officers may use the guild bank.')).toBe(true);
-    expect(sim.guildBankInfoFor(sim.playerId)).toBeNull();
+    // Still a member: the stream stays (read-only), the edit verdict is gone.
+    expect(sim.guildBankInfoFor(sim.playerId)?.canEdit).toBe(false);
   });
 
   it('the whole Phase 2 op surface draws NO rng (determinism)', () => {
@@ -2639,8 +2654,10 @@ describe('guildBankInfoForGuild (the ungated operator read)', () => {
   it('reads the book by guild id with no proximity, rank, or alive gate', () => {
     const sim = makeOfficerSim({ treasury: 4_242 });
     book(sim).inventory.push({ itemId: 'wolf_fang', count: 2 });
-    // Degrade every gate the PLAYER read applies: away from the banker, demoted
-    // to member, and dead. The player read goes null; the operator read does not.
+    // Degrade the PLAYER read: DEAD is what nulls it (since the v0.35 member
+    // read-only view a demotion alone keeps the stream and only drops canEdit;
+    // the demotion here proves rank is irrelevant to the operator read too).
+    // The player read goes null; the operator read does not.
     sim.setPlayerGuildMembership(sim.playerId, { guildId: GUILD_ID, rank: 'member' });
     const p = sim.entities.get(sim.playerId);
     if (!p) throw new Error('missing player');

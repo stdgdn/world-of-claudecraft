@@ -371,7 +371,7 @@ describe('items vendor: buy / sell / sellAllJunk / buyBack', () => {
     player.pos.x = fury.pos.x;
     player.pos.z = fury.pos.z;
     meta.inventory.length = 0;
-    meta.honor = 1_000;
+    meta.honor = 1_400;
     meta.lifetimeHonor = 2_000;
 
     items.buyItem(ctxOf(sim), fury.id, 'final_argument_greatblade', pid);
@@ -391,7 +391,7 @@ describe('items vendor: buy / sell / sellAllJunk / buyBack', () => {
     player.pos.x = fury.pos.x;
     player.pos.z = fury.pos.z;
     meta.inventory.length = 0;
-    meta.honor = 1_600;
+    meta.honor = 2_400;
 
     items.buyItem(ctxOf(sim), fury.id, 'final_argument_greatblade', pid);
     items.buyItem(ctxOf(sim), fury.id, 'final_argument_greatblade', pid);
@@ -535,7 +535,39 @@ describe('items vendor: buy / sell / sellAllJunk / buyBack', () => {
     items.buyItem(ctxOf(sim), fury.id, 'final_argument_greatblade', pid, { bulk: true });
 
     expect(sim.countItem('final_argument_greatblade', pid)).toBe(1);
-    expect(meta.honor).toBe(10_000 - 800);
+    expect(meta.honor).toBe(10_000 - 1_200);
+  });
+
+  it('buyItem bulk purchase force-1s a soulbound copper-priced stackable, matching the count path (Q23)', () => {
+    const sim = makeWorld();
+    const { pid, wilkes, meta } = vendorPlayer(sim);
+    const ctx = ctxOf(sim);
+    const testId = 'test_soulbound_rations';
+    ITEMS[testId] = {
+      id: testId,
+      name: 'Test Soulbound Rations',
+      kind: 'food',
+      foodHp: 50,
+      buyValue: 10,
+      soulbound: true,
+      sellValue: 1,
+    };
+    wilkes.vendorItems.push(testId);
+
+    try {
+      // Ample gold: a plain copper-priced food row would bulk-buy the full
+      // bag stack size (20). Soulbound must instead fall through to the
+      // ordinary single-purchase path (vendorCountForced force-1), granting
+      // exactly one vendorStackSize-of-food purchase (5 units) at the
+      // per-unit price, never the bulk-multiplied quantity.
+      meta.copper = 10_000;
+      items.buyItem(ctx, wilkes.id, testId, pid, { bulk: true });
+      expect(sim.countItem(testId, pid)).toBe(5);
+      expect(meta.copper).toBe(10_000 - 10 * 5);
+    } finally {
+      wilkes.vendorItems.splice(wilkes.vendorItems.indexOf(testId), 1);
+      delete ITEMS[testId];
+    }
   });
 
   it('buyItem bulk purchase never buys more than one mount, even with ample gold', () => {
@@ -814,9 +846,9 @@ describe('items vendor: buy / sell / sellAllJunk / buyBack', () => {
 
     items.buyItem(ctxOf(sim), fury.id, 'final_argument_greatblade', pid, { count: 5 });
 
-    // One purchase, one per-purchase honor debit: never 5 x 800.
+    // One purchase, one per-purchase honor debit: never 5 x 1,200.
     expect(sim.countItem('final_argument_greatblade', pid)).toBe(1);
-    expect(meta.honor).toBe(10_000 - 800);
+    expect(meta.honor).toBe(10_000 - 1_200);
   });
 
   it('buyItem count on a dual-price row is forced to one purchase charging both currencies once', () => {

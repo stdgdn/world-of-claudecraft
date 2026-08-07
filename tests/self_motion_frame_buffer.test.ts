@@ -10,6 +10,8 @@ const moveInput = (forward: boolean): MoveInput => ({
   strafeLeft: false,
   strafeRight: false,
   jump: false,
+  dive: false,
+  surface: false,
 });
 
 describe('self motion frame buffer', () => {

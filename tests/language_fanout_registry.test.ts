@@ -83,6 +83,7 @@ function stripComments(source: string): string {
 
 /** `call|gate`, the same key `hud_update_drive.test.ts` uses. */
 const FANOUT_ARMS: readonly string[] = [
+  'this.bgScoreboard.relocalize|',
   'this.syncDailyRewardsSurfaceLabels|',
   'this.storePromoCard.relocalize|',
   'this.refreshKeybindLabels|',
@@ -91,16 +92,18 @@ const FANOUT_ARMS: readonly string[] = [
   'this.riftTracker.relocalize|',
   'this.partyFramesPainter.relocalize|',
   'this.mapPainter.relocalize|',
+  'this.delvePainter.relocalize|',
   'this.targetFrameMover.relocalize|',
   'this.playerFrameMover.relocalize|',
   'this.partyFrameMover.relocalize|',
   'this.targetAurasWindow.relocalize|',
   'this.questlogWindow.render|this.questlogWindow.isOpen',
   "this.renderBags|$('#bags').style.display !== 'none'",
-  "this.renderVendor|this.openVendorNpcId !== null && $('#vendor-window').style.display === 'block'",
-  "this.renderHeroicVendor|this.openHeroicVendorNpcId !== null && $('#vendor-window').style.display === 'block'",
-  "this.renderTrain|this.openTrainNpcId !== null && $('#train-window').style.display === 'block'",
-  "this.renderUnbind|this.openUnbindNpcId !== null && $('#unbind-window').style.display === 'block'",
+  // The four service windows (copper vendor, heroic quartermaster, train,
+  // unbind) repaint through the shared helper; its per-window open-plus-shown
+  // guards are pinned by tests/train_window_hud.test.ts, since this half only
+  // sees refreshLocalizedDynamicUi's OWN statement-position calls.
+  'this.repaintOpenServiceWindows|',
   'this.renderTownFocus|this.townFocusOpen',
   'this.marketWindow.render|this.marketWindow.isOpen',
   'this.bankWindow.render|this.bankWindow.isOpen',
@@ -189,6 +192,12 @@ interface AnsweredSurface extends GatedModule {
 }
 
 const ANSWERED: readonly AnsweredSurface[] = [
+  {
+    file: 'hud/battleground/battleground_scoreboard_painter.ts',
+    memos: ['lastSig'],
+    answer: 'this.bgScoreboard.relocalize',
+    why: 'one signature over the whole match strip (score, timer, roster), so every localized label on it would sit in the old locale until the next score or tick moved the signature',
+  },
   {
     file: 'mount_race_controls.ts',
     memos: ['lastButtonVisible', 'lastCountdownMode', 'lastCountdownNumber'],
@@ -370,6 +379,12 @@ const NOT_A_LANGUAGE_GATE: ReadonlyArray<{
     memos: ['lastAnnounced'],
     reason:
       'lastAnnounced gates nothing that is drawn: it decides only whether the refusal line RE-ANNOUNCES to assistive tech (a live region inserted already-populated is not announced, so the pane re-writes the same text one task later). The visible text is rebuilt unconditionally on every paint, and the pane is repainted wholesale by BankWindow.render(), which the language fan-out already drives. A locale switch therefore relocalizes the log by itself; at worst the refusal is not re-announced in the new locale, which is the correct behaviour anyway (the refusal did not change).',
+  },
+  {
+    file: 'guild_bank_window.ts',
+    memos: ['prevReadOnly'],
+    reason:
+      'prevReadOnly gates nothing that is drawn: it is the demotion-edge detector deciding only whether the read-only note carries live-region semantics on THIS paint (a mid-view rank loss is voiced once; steady read-only repaints stay silent, the guild_bank_log_window lastAnnounced shape). The note text and every other string are rebuilt unconditionally on each paint, and the pane is repainted wholesale by BankWindow.render(), which the language fan-out already drives, so a locale switch relocalizes the whole Guild tab by itself. The edge cannot fire from a locale switch either: readOnly derives from the snapshot canEdit flag, not from any text.',
   },
   {
     file: 'deed_tracker_painter.ts',
@@ -574,7 +589,12 @@ describe('language fan-out: half 2, every signature-gated src/ui surface is clas
       // 5 as of the guild bank activity log: its `lastAnnounced` memo gates an
       // assistive-tech RE-ANNOUNCEMENT and nothing that is drawn (argued in the
       // frontend-seam review of that slice; the row states the reasoning).
-    ).toBe(5);
+      // 6 as of the guild bank member read-only view: guild_bank_window's
+      // `prevReadOnly` is the same announcement-only shape (it decides whether
+      // the read-only note is a live region on the demotion-edge paint, never
+      // what is drawn; BankWindow.render repaints the pane wholesale and the
+      // fan-out already drives it).
+    ).toBe(6);
   });
 
   it('gives every relocalize() in src/ui a caller in the fan-out', () => {

@@ -168,16 +168,20 @@ describe('guild_bank_log: the read gate is the BANK gate', () => {
     expect(logFrames(sent)[0]?.ok).toBe(true);
   });
 
-  it('REFUSES a plain member, and never runs the query for them', async () => {
-    // The decisive arm: a member must not reach the guild's bank history by any
-    // route the officer-only design withholds the bank itself by.
+  it('serves a plain MEMBER too (the guild-wide read-only view includes the log)', async () => {
+    // The decisive arm of the v0.35 widening: the log is the trust surface
+    // that lets the whole guild audit its officers, so the same membership
+    // gate that streams the read-only bank view serves the history read.
     const server = new GameServer();
     const { session, sent } = joinServer(server, 2, 'Grunt');
     stand(server, session, 'member');
     dispatch(server, session);
     await settle();
-    expect(logFrames(sent)).toEqual([{ t: 'gbanklog', ok: false }]);
-    expect(dbMock.loadGuildBankLogRows).not.toHaveBeenCalled();
+    const [frame] = logFrames(sent);
+    expect(frame?.ok).toBe(true);
+    expect(frame?.entries).toEqual([
+      { id: 5, at: AT, actor: 'Kara', op: 'withdraw', itemId: 'iron_ore', count: 3, copper: null },
+    ]);
   });
 
   it('REFUSES an officer standing away from a banker (the proximity half of the gate)', async () => {
@@ -221,10 +225,11 @@ describe('guild_bank_log: the read gate is the BANK gate', () => {
     expect(dbMock.loadGuildBankLogRows.mock.calls[0][0]).toBe(GUILD_ID);
   });
 
-  it('re-checks authority AFTER the awaited read: a mid-flight demote refuses', async () => {
-    // The read can share an in-flight query, so a demotion, leave, death, or
+  it('re-checks authority AFTER the awaited read: a mid-flight guild LEAVE refuses', async () => {
+    // The read can share an in-flight query, so a leave, kick, death, or
     // walk-away can land inside that window. The answer must reflect authority
-    // at DELIVERY time, not at request time.
+    // at DELIVERY time, not at request time. (A mid-flight DEMOTE no longer
+    // refuses: a member holds the membership gate, the next test.)
     const server = new GameServer();
     const { session, sent } = joinServer(server, 1, 'Offi');
     stand(server, session, 'officer');
@@ -238,13 +243,34 @@ describe('guild_bank_log: the read gate is the BANK gate', () => {
     dispatch(server, session);
     await settle();
     // Still a full officer at this instant: the ONLY thing that changes below
-    // is the rank, so the refusal can only come from the post-await re-check.
+    // is the membership, so the refusal can only come from the post-await
+    // re-check.
     restand(server, session);
     expect(server.sim.guildBankInfoFor(session.pid)).not.toBeNull();
-    server.sim.setPlayerGuildMembership(session.pid, { guildId: GUILD_ID, rank: 'member' });
+    server.sim.setPlayerGuildMembership(session.pid, null);
     release?.();
     await settle();
     expect(logFrames(sent)[0]).toEqual({ t: 'gbanklog', ok: false });
+  });
+
+  it('a mid-flight DEMOTE to member still serves: membership is the gate, not rank', async () => {
+    const server = new GameServer();
+    const { session, sent } = joinServer(server, 1, 'Offi');
+    stand(server, session, 'officer');
+    let release: (() => void) | undefined;
+    dbMock.loadGuildBankLogRows.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve([]);
+        }),
+    );
+    dispatch(server, session);
+    await settle();
+    restand(server, session);
+    server.sim.setPlayerGuildMembership(session.pid, { guildId: GUILD_ID, rank: 'member' });
+    release?.();
+    await settle();
+    expect(logFrames(sent)[0]?.ok).toBe(true);
   });
 
   it('answers a failed read with a refusal rather than leaving the pane loading forever', async () => {

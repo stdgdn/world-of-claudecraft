@@ -17,10 +17,12 @@ import {
   localCasterTier,
   planCast,
   planImpact,
+  wornStunIndex,
 } from '../ability_vfx_core';
 import { ABILITY_VFX_FULL_SPECS } from '../ability_vfx_full_specs';
 import { holdsBuffVfxWhileWorn } from '../ability_vfx_longbuff_core';
 import { ABILITY_VFX_SPECS } from '../ability_vfx_specs';
+import { isVisuallyDead } from '../anim_state';
 import type { AbilityAudioKind, AbilityAudioOpts } from '../audio_sink';
 import { attackAbilityId } from '../characters/weapon_attack_style_core';
 import { type AbilityVfxFx, asOrbitStyle, type ParticleBurstKind } from './fx';
@@ -180,8 +182,15 @@ export interface AbilityVfxEntityState {
   castTotal: number;
   // breakThreshold rides along for the Lingering Dread fear alias (present on
   // the offline sim's live Aura objects; mirrored online as a presence-only 1
-  // via the aura wire's bt flag).
-  auras: readonly { id: string; breakThreshold?: number }[];
+  // via the aura wire's bt flag). kind/remaining feed the stunned-star tell
+  // (both live on the offline Aura and on the online mirror via the aura
+  // wire's kind/rem), and dead gates it off a corpse; optional so tests can
+  // omit them.
+  auras: readonly { id: string; kind?: string; remaining?: number; breakThreshold?: number }[];
+  // dead + hp gate the stun tell off a corpse through isVisuallyDead; both
+  // optional so tests can omit them (an absent hp reads as alive).
+  dead?: boolean;
+  hp?: number;
   kind?: string;
   templateId?: string;
   // On-next-swing queue (heroic-strike style ability id while armed). Present
@@ -509,7 +518,12 @@ export class AbilityVfx {
       const ceremonial =
         arch === 'buff' || arch === 'summon' || arch === 'cc' || arch === 'heal' || !!full?.spirit;
       const utility =
-        targeted && (arch === 'strike' || arch === 'cc' || arch === 'burst' || arch === 'shout');
+        (targeted &&
+          (arch === 'strike' || arch === 'cc' || arch === 'burst' || arch === 'shout')) ||
+        // Untargeted shout/dash carry no victim to anchor a contact claim and
+        // no castFx of their own (heroic_leap, piercing_howl): selfCast is
+        // their only completion cue, same as the ceremonies above.
+        (!targeted && (arch === 'shout' || arch === 'dash'));
       if (!full || !(utility || ceremonial)) return false;
     }
     const tier = this.castTier(ev.sourceId, ev.ability);
@@ -1314,6 +1328,23 @@ export class AbilityVfx {
         }
       }
       bands++;
+    }
+    // The stunned-star tell: ANY worn stun aura circles a star band over the
+    // victim's head for the aura's whole life. Matched by aura KIND, never
+    // the spec table, so every stun source reads (mob stomps and traps
+    // included) and it works online for any victim in interest range, exactly
+    // like the bands above. Actionable information: it rides outside the cast
+    // budget, every quality tier keeps it, and the fx engine sweeps it the
+    // frame the aura fades. A dead body sheds it (an unbreakable stun can
+    // survive death by design, e.g. the Nythraxis transition ghosts; a corpse
+    // must not wear a frozen band). Deadness is the renderer's own
+    // isVisuallyDead rule, not a bare `dead` flag: a mob at 0 hp whose flag
+    // has not landed yet would otherwise keep the band for that window. One
+    // uniform yellow for every source, the classic dizzy-stars read
+    // (STUN_STAR_COLOR in the core owns the why).
+    if (!isVisuallyDead({ dead: e.dead === true, hp: e.hp ?? 1 })) {
+      const stunAt = wornStunIndex(e.auras);
+      if (stunAt >= 0) fx.holdStunStars(e.id, e.auras[stunAt].remaining ?? 1);
     }
     // On-next-swing queue (heroic-strike style): while the sim's queuedOnSwing
     // flag is armed, the queued ability's authored orbit rides the caster as

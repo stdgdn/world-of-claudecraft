@@ -8,3 +8,5 @@ export * from './unbind_view';
 export * from './unbind_window';
 export * from './vendor_view';
 export * from './vendor_window';
+export * from './warfare_vendor_view';
+export * from './warfare_vendor_window';

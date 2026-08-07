@@ -1042,14 +1042,24 @@ export class Vfx {
     radius = 0.5,
     strength = 1,
   ): void {
-    const safeRadius = Math.min(1.4, Math.max(0.25, radius));
-    const safeStrength = Math.min(1.5, Math.max(0.35, strength));
+    // Ceilings sized for a full plunge entry (a flail-height cliff dive feeds
+    // ~2.4): ordinary wade/swim entries still arrive at ~1 and look exactly
+    // as they always did, the extra headroom only ever carries impact weight.
+    const safeRadius = Math.min(2.2, Math.max(0.25, radius));
+    const safeStrength = Math.min(2.6, Math.max(0.35, strength));
     const directionLength = Math.max(Math.hypot(dirX, dirZ), 0.0001);
     const forwardX = dirX / directionLength;
     const forwardZ = dirZ / directionLength;
     const sideX = -forwardZ;
     const sideZ = forwardX;
-    const dropCount = this.scaledCount(Math.min(12, Math.max(7, Math.round(7 + safeStrength * 3))));
+    // Base curve unchanged through strength 1.5; hard entries add drops on a
+    // steeper slope so a plunge reads as a burst, not a slightly-busy wade.
+    const dropCount = this.scaledCount(
+      Math.min(
+        26,
+        Math.max(7, Math.round(7 + safeStrength * 3 + Math.max(0, safeStrength - 1.5) * 8)),
+      ),
+    );
     for (let i = 0; i < dropCount; i++) {
       const side = Math.random() * 2 - 1;
       const spread = side * safeRadius * (0.3 + Math.random() * 0.45);
@@ -1084,6 +1094,39 @@ export class Vfx {
       SPR.glowSoft,
       0,
     );
+  }
+
+  /**
+   * One beat of a surface swimmer's kick: a small churn of droplets thrown up
+   * and back off the feet. Deliberately a fraction of characterWaterSplash —
+   * this fires several times a second for as long as somebody is swimming, so
+   * it stays at a handful of particles with no ring flash.
+   *
+   * Submerged swimmers never call this: under the surface there is no water
+   * line to break, and the stroke leaves no VFX at all.
+   */
+  swimKickSplash(x: number, y: number, z: number, dirX: number, dirZ: number, strength = 1): void {
+    const safe = Math.min(1.4, Math.max(0.3, strength));
+    const length = Math.max(Math.hypot(dirX, dirZ), 0.0001);
+    const backX = -dirX / length;
+    const backZ = -dirZ / length;
+    const drops = this.scaledCount(Math.round(3 + safe * 2));
+    for (let i = 0; i < drops; i++) {
+      const side = Math.random() * 2 - 1;
+      this.spawn(
+        x + backZ * side * 0.22,
+        y + 0.02,
+        z - backX * side * 0.22,
+        backX * (0.5 + Math.random() * 0.7) * safe + backZ * side * 0.5,
+        (0.9 + Math.random() * 1.1) * safe,
+        backZ * (0.5 + Math.random() * 0.7) * safe - backX * side * 0.5,
+        i % 3 === 0 ? 0xcfe7ea : 0x7fb8c0,
+        0.1 + Math.random() * 0.07,
+        0.26 + Math.random() * 0.14,
+        6.4,
+        SPR.glowSoft,
+      );
+    }
   }
 
   tick(targetId: number, school: string, color?: number): void {

@@ -23,6 +23,7 @@ interface ToolEffectLineHarness {
     playerId: number;
     craftingIdentity: { synced: boolean };
     craftSkills: Record<string, number>;
+    gatheringProficiency: Record<string, number>;
   };
   renderer: { handleEvent: ReturnType<typeof vi.fn> };
   playEventSfx: ReturnType<typeof vi.fn>;
@@ -47,7 +48,12 @@ interface ToolEffectLineHarness {
 
 function makeHud(): ToolEffectLineHarness {
   const hud = Object.create(Hud.prototype) as unknown as ToolEffectLineHarness;
-  hud.sim = { playerId: PLAYER_ID, craftingIdentity: { synced: false }, craftSkills: {} };
+  hud.sim = {
+    playerId: PLAYER_ID,
+    craftingIdentity: { synced: false },
+    craftSkills: {},
+    gatheringProficiency: {},
+  };
   hud.renderer = { handleEvent: vi.fn() };
   hud.playEventSfx = vi.fn();
   hud.meters = { onEvent: vi.fn() };
@@ -130,7 +136,8 @@ describe('the toolEffectResult chat arm', () => {
           count: 5,
         },
       ],
-      ['throttled', { action: 'recharge', professionId: 'mining', effectId: 'gatherers_cache' }],
+      // Phase 5: concurrent-cast busy replaces the retired throttle deny.
+      ['busy', { action: 'recharge', professionId: 'mining', effectId: 'gatherers_cache' }],
     ];
     for (const [reason, body] of denies) {
       hud.handleEvents([ev({ ok: false, reason, ...body })]);
@@ -149,7 +156,7 @@ describe('the toolEffectResult chat arm', () => {
       [5, 'already fully charged'], // already_full
       [6, 'Carry a better'], // tool_capped
       [7, 'Recharging'], // insufficient_materials
-      [8, 'crafting too quickly'], // throttled
+      [8, 'busy'], // busy (Phase 5 concurrent cast)
     ];
     for (const [index, anchor] of anchors) {
       expect(rendered[index], `line for ${denies[index][0]}`).toContain(anchor);

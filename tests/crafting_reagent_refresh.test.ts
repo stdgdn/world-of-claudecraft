@@ -306,7 +306,10 @@ describe('crafting window bag-freshness wiring (source pins)', () => {
     // Scoped to the method: moving the latch into the probe would leave every
     // other paint cause (the station edge, a craft, a tab switch, the open
     // itself) un-armed, and a whole-file pin would not notice.
-    const renderCrafting = region('private renderCrafting(): void {', 'closeCrafting(): void {');
+    const renderCrafting = region(
+      'private renderCrafting(focusReturnRecipeId = ',
+      'closeCrafting(): void {',
+    );
     expect(renderCrafting).toContain(
       'this.lastCraftingReagentSig = craftingReagentSig(this.sim.inventory, this.sim.player.name);',
     );
@@ -332,9 +335,12 @@ describe('crafting window bag-freshness wiring (source pins)', () => {
   });
 
   it('the online authoritative inventory delta converges it on the same frame', () => {
-    expect(hud).toMatch(
-      /onInventoryChanged\(\): void \{[^}]*this\.refreshOpenCraftingIfReagentsChanged\(\);\s*\}/,
-    );
+    // Bounded at the METHOD's own two-space closing brace rather than a flat
+    // [^}]* reach from the opener (#2931 made that break this pin once) or
+    // the next definition (whose gap a future method could squat in): inner
+    // blocks close at deeper indents, so the slice is exactly the hook body.
+    const arm = region('onInventoryChanged(): void {', '\n  }');
+    expect(arm).toContain('this.refreshOpenCraftingIfReagentsChanged();');
   });
 
   it('the offline vendor buy converges it on the click', () => {
@@ -354,12 +360,16 @@ function craftingDeps() {
     hideTooltip: vi.fn(),
     onCraft: vi.fn(),
     onClose: vi.fn(),
+    onOpenOrders: vi.fn(),
     itemIcon: vi.fn(() => ''),
     moneyHtml: vi.fn(() => ''),
     itemTooltip: vi.fn(() => ''),
     attachTooltip: vi.fn(),
     commissionChecked: vi.fn((_recipeId: string) => false),
     onToggleCommission: vi.fn(),
+    craftQty: () => 1,
+    onCraftQty: vi.fn(),
+    announce: vi.fn(),
     selectedCraft: () => null as string | null,
     onSelectCraft: vi.fn(),
   };

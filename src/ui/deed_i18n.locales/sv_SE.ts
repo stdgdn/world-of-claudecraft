@@ -7,6 +7,46 @@
 import type { DeedLocaleTable } from '../deed_i18n';
 
 export const table: DeedLocaleTable = {
+  pvp_bg_first_capture: {
+    name: 'Banér i hand',
+    desc: 'Erövra en flagga i Törnhålefälten.',
+  },
+  pvp_bg_first_win: {
+    name: 'Hålan håller',
+    desc: 'Vinn en drabbning i Törnhålefälten.',
+  },
+  pvp_bg_wins_25: {
+    name: 'Hålans väktare',
+    desc: 'Vinn 25 drabbningar i Törnhålefälten.',
+    title: 'Flaggbärare',
+  },
+  pvp_bg_captures_100: {
+    name: 'Hundra banér',
+    desc: 'Erövra 100 flaggor i Törnhålefälten under din karriär.',
+  },
+  dgn_rift: {
+    name: 'Revvandrare',
+    desc: 'Rensa en reva genom att besegra dess våningsboss.',
+  },
+  dgn_rift_s_rank: {
+    name: 'Revhärskare',
+    desc: 'Rensa en reva av grad S, den svåraste graden en revportal kan skapa.',
+  },
+  pvp_honor_sergeant: {
+    name: 'Sergeant',
+    desc: 'Tjäna in 10 000 heder under din livstid. Att spendera den kostar dig aldrig rangen.',
+    title: 'Sergeant',
+  },
+  pvp_honor_knight_lieutenant: {
+    name: 'Riddarlöjtnant',
+    desc: 'Tjäna in 40 000 heder under din livstid, en säsong av verkligt krig bakom dig.',
+    title: 'Riddarlöjtnant',
+  },
+  pvp_honor_field_marshal: {
+    name: 'Fältmarskalk',
+    desc: 'Tjäna in 150 000 heder under din livstid. Sällsynt i alla riken, och så borde det vara.',
+    title: 'Fältmarskalk',
+  },
   chr_drakemaw_broodlord: {
     name: 'Kullbrytaren',
     desc: 'Fäll en Drakgapets kullherre bland dess ägg, genom vrålet, klyvhugget och elden.',
@@ -14,6 +54,54 @@ export const table: DeedLocaleTable = {
   chr_maw_matriarch: {
     name: 'Himlen tystnar',
     desc: 'Fäll Cindraleth, Gapets matriark, i hennes kraterbo ovanför Drakgapet.',
+  },
+  chr_frostveil_gatherer: {
+    name: 'Skord pa terrasserna',
+    desc: 'Skorda en malmadra, ett tradbestand och en ortbadd i Frostveil.',
+  },
+  chr_frostveil_first_cast: {
+    name: 'Forsta isen pa tjarnen',
+    desc: 'Fanga en fisk i Frostveils vatten.',
+  },
+  chr_amberfall_gatherer: {
+    name: 'Amberfalls skord',
+    desc: 'Skorda en malmadra, ett tradbestand och en ortbadd i Amberfall.',
+  },
+  chr_amberfall_first_cast: {
+    name: 'En fangst fran stormyren',
+    desc: 'Fanga en fisk i Amberfalls vatten.',
+  },
+  chr_nightbloom_gatherer: {
+    name: 'Den drommande skorden',
+    desc: 'Skorda en malmadra, ett tradbestand och en ortbadd i Nightbloom.',
+  },
+  chr_nightbloom_first_cast: {
+    name: 'En ring pa manbrunnen',
+    desc: 'Fanga en fisk i Nightblooms vatten.',
+  },
+  chr_wraithwood_gatherer: {
+    name: 'Skord under lovtaket',
+    desc: 'Skorda en malmadra, ett tradbestand och en ortbadd i Wraithwood.',
+  },
+  chr_wraithwood_first_cast: {
+    name: 'Ett kast i spegelviken',
+    desc: 'Fanga en fisk i Wraithwoods vatten.',
+  },
+  chr_palmreach_gatherer: {
+    name: 'Skord pa palmstranden',
+    desc: 'Skorda en malmadra, ett tradbestand och en ortbadd i Palmreach.',
+  },
+  chr_palmreach_first_cast: {
+    name: 'Kast i safirlagunen',
+    desc: 'Fanga en fisk i Palmreachs vatten.',
+  },
+  chr_evergarden_gatherer: {
+    name: 'Parterrens gava',
+    desc: 'Skorda en malmadra, ett tradbestand och en ortbadd i Evergarden.',
+  },
+  chr_evergarden_first_cast: {
+    name: 'Ett kast pa kronbladsdammen',
+    desc: 'Fanga en fisk i Evergardens vatten.',
   },
   pvp_card_duel_first_win: {
     name: 'Husregler',
@@ -804,5 +892,33 @@ export const table: DeedLocaleTable = {
   chr_farshore_first_cast: {
     name: 'Det måsarna vet',
     desc: 'Fånga en fisk ur Fjärrkustens vatten.',
+  },
+  prog_engineering_rare: {
+    name: 'Precisionsingenjörskonst',
+    desc: 'Skapa ditt första sällsynta föremål i Ingenjörskonst.',
+  },
+  prog_alchemy_rare: {
+    name: 'En sällsynt årgång',
+    desc: 'Skapa ditt första sällsynta föremål i Alkemi.',
+  },
+  prog_cooking_rare: {
+    name: 'En rätt att minnas',
+    desc: 'Skapa ditt första sällsynta föremål i Matlagning.',
+  },
+  prog_leatherworking_rare: {
+    name: 'Fin garvning',
+    desc: 'Skapa ditt första sällsynta föremål i Läderhantverkeri.',
+  },
+  prog_tailoring_rare: {
+    name: 'Ett mästerligt stygn',
+    desc: 'Skapa ditt första sällsynta föremål i Skrädderi.',
+  },
+  prog_weaponcrafting_rare: {
+    name: 'Härdad till glans',
+    desc: 'Skapa ditt första sällsynta föremål i Vapensmide.',
+  },
+  prog_armorcrafting_rare: {
+    name: 'Pansrad till perfektion',
+    desc: 'Skapa ditt första sällsynta föremål i Rustningssmide.',
   },
 };

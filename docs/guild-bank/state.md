@@ -17,6 +17,19 @@ gate green). Teardown of docs/guild-bank/ awaits the user's explicit confirmatio
   `server/social.ts` / `server/game.ts` social wiring).
 - Officer+ only (leader included): see, deposit, withdraw, buy expansions. Members get no
   snapshot data and no UI tab.
+  REVISED (2026-08-06, v0.35 member read-only view): the VIEW gate is now guild-wide.
+  `guildBankInfoFor` streams to ANY stamped member at a banker and carries a
+  server-computed `canEdit` flag (`GUILD_BANK_EDIT_RANKS`, still exactly
+  `{leader, officer}`); every OP still refuses a plain member through
+  `requireOfficerBook`, unchanged. The client renders a member's pane read-only
+  from `canEdit` (gold buttons disabled, no open/buy rows, inert slot clicks, an
+  always-visible note, bag clicks fall to the cannot-deposit speak-path), and the
+  activity log read, which reuses the bank gate verbatim, is therefore also
+  guild-wide: that WIDENS the social-trust mechanism (the members whose pooled
+  goods the officers steward can now audit the history themselves). A mid-view
+  demotion keeps the stream and drops only `canEdit`; leave/kick/walk-away/death
+  still null it. `hudChrome.bank.logRefused` is retired for
+  `hudChrome.bank.logUnavailable` (the shipped rows promised the old rule).
 - Architecture: the market/mail pattern (sim owns the books; server stamps membership;
   escrow persistence in one transaction). See brainstorm.md for the full rationale.
 - Access: banker NPC proximity (the personal-bank `nearBanker` gate), Guild tab inside the
@@ -123,9 +136,14 @@ gate green). Teardown of docs/guild-bank/ awaits the user's explicit confirmatio
   - GATE: the BANK's own gate, reused verbatim (`sim.guildBankInfoFor(pid) !== null`:
     alive, officer-plus via `GUILD_BANK_RANKS`, book loaded, at a banker). A MEMBER is
     refused by exactly the predicate that denies them the bank itself, so the log can
-    never be a side channel around the officer-only design. The guild id comes from the
+    never be a side channel around the officer-only design. (SUPERSEDED 2026-08-06,
+    v0.35 member read-only view: the reused predicate is now membership-wide, so the
+    log serves every member; the reuse itself, the stamp-sourced guild id, and the
+    post-await re-check are unchanged, and DB read volume stays bounded because the
+    per-guild cached read + single-flight below answers every member from the same
+    30s cache entry regardless of audience size.) The guild id comes from the
     server's own membership STAMP, never from the request (there is no guild field on
-    the wire). The gate is RE-CHECKED after the awaited read, because a demotion,
+    the wire). The gate is RE-CHECKED after the awaited read, because a
     leave, death or walk-away can land in that window; the answer reflects authority at
     DELIVERY time. `GameServer.guildBankLogGuildFor` is the one place that decides it.
   - SHOWN: `deposit | withdraw | deposit_gold | withdraw_gold | buy_slots | open_bank |
@@ -509,6 +527,11 @@ gate green). Teardown of docs/guild-bank/ awaits the user's explicit confirmatio
       (`{leader, officer}`), shared by `requireOfficerBook` AND
       `guildBankInfoFor`. A rank added to `GUILD_RANKS` is DENIED until the
       allowlist is deliberately revisited (swept per rank + a future-rank arm).
+      (REVISED 2026-08-06, v0.35 member read-only view: the allowlist is now
+      `GUILD_BANK_EDIT_RANKS` and gates EDITS only; `guildBankInfoFor` admits
+      any stamped member and stamps the allowlist verdict onto the snapshot as
+      `canEdit`. The fail-closed sweep survives: a future rank is refused every
+      op and reads `canEdit` false.)
     - `guildBankInfoFor` projects a pipe-REFUSED slot through
       `publicInstanceView` (`guildBankSlotView`) instead of shipping the whole
       payload. The old full-payload ruling only held for the deposit path; a

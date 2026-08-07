@@ -343,7 +343,14 @@ function ginfo(
   purchasedSlots = 0,
   nextExpansionPrice: number | null = 50000,
 ): GuildBankInfo {
-  return { treasury, slots, capacity: 12 + purchasedSlots, purchasedSlots, nextExpansionPrice };
+  return {
+    treasury,
+    slots,
+    capacity: 12 + purchasedSlots,
+    purchasedSlots,
+    nextExpansionPrice,
+    canEdit: true,
+  };
 }
 
 describe('diffGuildBankOp (pure)', () => {
@@ -532,6 +539,13 @@ describe('diffGuildBankOp (pure)', () => {
     expect(diffGuildBankOp('withdraw', ginfo(500), null)).toEqual([]);
     expect(diffGuildBankOp('buy_slots', ginfo(500, [], 30), ginfo(500, [], 30))).toEqual([]);
     expect(diffGuildBankOp('open_bank', ginfo(500, [], 0), ginfo(500, [], 0))).toEqual([]);
+    // The ITEM arms under identical non-null snapshots: exactly the shape a
+    // plain MEMBER's refused deposit/withdraw takes since the v0.35 read-only
+    // view (the membership-gated read answers, the op refuses rank-side and
+    // moves nothing), so no ledger row and no dirty mark may come of it.
+    const slot = { itemId: 'wolf_fang', count: 3 };
+    expect(diffGuildBankOp('deposit', ginfo(500, [slot], 30), ginfo(500, [slot], 30))).toEqual([]);
+    expect(diffGuildBankOp('withdraw', ginfo(500, [slot], 30), ginfo(500, [slot], 30))).toEqual([]);
   });
 });
 

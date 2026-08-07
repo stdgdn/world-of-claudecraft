@@ -40,6 +40,7 @@ import { resetDrownedLitanyBossEncounter } from '../delves/drowned_litany_boss';
 import { clearDelveRaiseDeadChannel } from '../delves/runs';
 import { isEscortNpcTemplate } from '../escort';
 import { PLAYER_BODY_RADIUS, PLAYER_SWIM_DEPTH } from '../pathfind';
+import { noteMatchPetUnravelled } from '../pet/pet_match_return';
 import {
   capRiftNonLethalMechanicDamage,
   RIFT_S_ZONE_TEMPO,
@@ -149,7 +150,14 @@ export function updateMob(ctx: SimContext, mob: Entity): void {
     }
     // a slain summoned demon unravels rather than respawning into the wild
     if (mob.ownerId !== null && MOBS[mob.templateId]?.family === 'demon') {
-      if (mob.corpseTimer <= 0) ctx.despawnPet(mob);
+      if (mob.corpseTimer <= 0) {
+        // An owner inside an arena-shaped match is owed this pet back on the way
+        // out, and this is the ONE disappearance the world causes rather than the
+        // owner (pet/pet_match_return.ts). Recorded before the entity goes, since
+        // afterwards it is unknowable. Pure state, no rng.
+        noteMatchPetUnravelled(ctx, mob);
+        ctx.despawnPet(mob);
+      }
       return;
     }
     // dungeon mobs stay dead until the instance resets
@@ -1461,7 +1469,7 @@ export function blockedTowardSpawn(ctx: SimContext, e: Entity, dest: Vec3): bool
   const nz = e.pos.z + Math.cos(facing) * step;
   if (
     !ctx.mobCanSwim(MOBS[e.templateId]) &&
-    groundHeight(nx, nz, ctx.cfg.seed) < waterLevelAt(nx, nz) - SWIM_DEPTH
+    groundHeight(nx, nz, ctx.cfg.seed) < waterLevelAt(nx, nz, ctx.cfg.seed) - SWIM_DEPTH
   )
     return true;
   const resolved = ctx.resolveMovePoint(nx, nz, BODY_RADIUS, e);

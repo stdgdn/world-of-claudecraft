@@ -7,6 +7,46 @@
 import type { DeedLocaleTable } from '../deed_i18n';
 
 export const table: DeedLocaleTable = {
+  pvp_bg_first_capture: {
+    name: 'Cờ Trong Tay',
+    desc: 'Chiếm một lá cờ tại Cánh Đồng Trũng Gai.',
+  },
+  pvp_bg_first_win: {
+    name: 'Trũng Gai Vững Bền',
+    desc: 'Thắng một trận Cánh Đồng Trũng Gai.',
+  },
+  pvp_bg_wins_25: {
+    name: 'Người Trấn Giữ Trũng Gai',
+    desc: 'Thắng 25 trận Cánh Đồng Trũng Gai.',
+    title: 'Người Cầm Cờ',
+  },
+  pvp_bg_captures_100: {
+    name: 'Một Trăm Lá Cờ',
+    desc: 'Chiếm 100 lá cờ tại Cánh Đồng Trũng Gai trong suốt sự nghiệp của bạn.',
+  },
+  dgn_rift: {
+    name: 'Người Đi Xuyên Rạn Nứt',
+    desc: 'Dọn sạch một Rạn Nứt bằng cách đánh bại trùm của tầng đó.',
+  },
+  dgn_rift_s_rank: {
+    name: 'Quân Vương Rạn Nứt',
+    desc: 'Dọn sạch một Rạn Nứt hạng S, bậc khó nhất mà một cổng Rạn Nứt có thể sinh ra.',
+  },
+  pvp_honor_sergeant: {
+    name: 'Trung Sĩ',
+    desc: 'Kiếm được 10.000 danh dự trong suốt cuộc đời nhân vật. Tiêu nó đi không bao giờ khiến bạn mất cấp bậc.',
+    title: 'Trung Sĩ',
+  },
+  pvp_honor_knight_lieutenant: {
+    name: 'Hiệp Sĩ Trung Úy',
+    desc: 'Kiếm được 40.000 danh dự trong suốt cuộc đời nhân vật, cả một mùa chiến tranh thực sự phía sau bạn.',
+    title: 'Hiệp Sĩ Trung Úy',
+  },
+  pvp_honor_field_marshal: {
+    name: 'Thống Chế',
+    desc: 'Kiếm được 150.000 danh dự trong suốt cuộc đời nhân vật. Hiếm có trên bất kỳ vương quốc nào, và nó nên như vậy.',
+    title: 'Thống Chế',
+  },
   chr_drakemaw_broodlord: {
     name: 'Kẻ Phá Vỡ Ổ Trứng',
     desc: 'Hạ gục một Lãnh Chúa Bầy Drakemaw giữa bầy trứng của nó, vượt qua tiếng gầm, đòn chém bổ, và ngọn lửa.',
@@ -14,6 +54,54 @@ export const table: DeedLocaleTable = {
   chr_maw_matriarch: {
     name: 'Bầu Trời Lặng Yên',
     desc: 'Hạ gục Cindraleth Mẫu Chúa Hàm trong tổ miệng núi lửa của nó, phía trên Drakemaw.',
+  },
+  chr_frostveil_gatherer: {
+    name: 'Thu hoach tren ruong bac thang',
+    desc: 'Thu hoach mot mach quang, mot vung go va mot luong thao moc o Frostveil.',
+  },
+  chr_frostveil_first_cast: {
+    name: 'Lop bang dau tren ho nho',
+    desc: 'Cau mot con ca trong vung nuoc Frostveil.',
+  },
+  chr_amberfall_gatherer: {
+    name: 'Vu thu hoach Amberfall',
+    desc: 'Thu hoach mot mach quang, mot vung go va mot luong thao moc o Amberfall.',
+  },
+  chr_amberfall_first_cast: {
+    name: 'Me ca tu dam lon',
+    desc: 'Cau mot con ca trong vung nuoc Amberfall.',
+  },
+  chr_nightbloom_gatherer: {
+    name: 'Vu thu hoach mong mo',
+    desc: 'Thu hoach mot mach quang, mot vung go va mot luong thao moc o Nightbloom.',
+  },
+  chr_nightbloom_first_cast: {
+    name: 'Gon song tren gieng trang',
+    desc: 'Cau mot con ca trong vung nuoc Nightbloom.',
+  },
+  chr_wraithwood_gatherer: {
+    name: 'Thu hoach duoi tan cay',
+    desc: 'Thu hoach mot mach quang, mot vung go va mot luong thao moc o Wraithwood.',
+  },
+  chr_wraithwood_first_cast: {
+    name: 'Lan cau trong vinh guong',
+    desc: 'Cau mot con ca trong vung nuoc Wraithwood.',
+  },
+  chr_palmreach_gatherer: {
+    name: 'Thu hoach tren bai co',
+    desc: 'Thu hoach mot mach quang, mot vung go va mot luong thao moc o Palmreach.',
+  },
+  chr_palmreach_first_cast: {
+    name: 'Tha cau o dam sapphire',
+    desc: 'Cau mot con ca trong vung nuoc Palmreach.',
+  },
+  chr_evergarden_gatherer: {
+    name: 'Loc cua vuon hoa',
+    desc: 'Thu hoach mot mach quang, mot vung go va mot luong thao moc o Evergarden.',
+  },
+  chr_evergarden_first_cast: {
+    name: 'Lan cau tren ao canh hoa',
+    desc: 'Cau mot con ca trong vung nuoc Evergarden.',
   },
   pvp_card_duel_first_win: {
     name: 'Luật Của Ta',
@@ -873,5 +961,33 @@ export const table: DeedLocaleTable = {
   chr_farshore_first_cast: {
     name: 'Điều Lũ Mòng Biển Biết',
     desc: 'Câu một con cá từ vùng nước của Bờ Biển Xa Xôi.',
+  },
+  prog_engineering_rare: {
+    name: 'Cơ Khí Chính Xác',
+    desc: 'Chế tạo vật phẩm hiếm đầu tiên trong Cơ Khí.',
+  },
+  prog_alchemy_rare: {
+    name: 'Rượu Vang Quý Hiếm',
+    desc: 'Chế tạo vật phẩm hiếm đầu tiên trong Giả Kim.',
+  },
+  prog_cooking_rare: {
+    name: 'Món Ăn Đáng Nhớ',
+    desc: 'Chế tạo vật phẩm hiếm đầu tiên trong Nấu Ăn.',
+  },
+  prog_leatherworking_rare: {
+    name: 'Thuộc Da Tinh Xảo',
+    desc: 'Chế tạo vật phẩm hiếm đầu tiên trong Thuộc Da.',
+  },
+  prog_tailoring_rare: {
+    name: 'Đường Kim Bậc Thầy',
+    desc: 'Chế tạo vật phẩm hiếm đầu tiên trong May Vá.',
+  },
+  prog_weaponcrafting_rare: {
+    name: 'Tôi Luyện Đến Sáng Bóng',
+    desc: 'Chế tạo vật phẩm hiếm đầu tiên trong Rèn Vũ Khí.',
+  },
+  prog_armorcrafting_rare: {
+    name: 'Mạ Đến Hoàn Hảo',
+    desc: 'Chế tạo vật phẩm hiếm đầu tiên trong Rèn Giáp.',
   },
 };

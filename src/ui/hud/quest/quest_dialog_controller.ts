@@ -18,6 +18,7 @@ import { archetypeImageUrl } from '../../profession_art';
 import { buildAttunementPreview } from '../../profession_identity_view';
 import { svgIcon } from '../../ui_icons';
 import { isStationMasterNpc } from '../vendor/train_view';
+import { isWarfareVendorNpc } from '../vendor/warfare_vendor_view';
 import { gossipMenuIsEmpty } from './gossip_menu';
 import { masterCraftTarget } from './master_craft_core';
 import { PROF_INTRO_QUEST_ID, professionIntroHintVisible } from './prof_intro_hint_core';
@@ -64,6 +65,9 @@ export interface QuestDialogControllerDeps {
   // to <body> without an explicit, still-live element handed in.
   openVendor(npcId: number, opener?: HTMLElement | null): void;
   openHeroicVendor(npcId: number, opener?: HTMLElement | null): void;
+  /** The WARFARE quartermaster's sectioned honor shop. Same opener handoff as
+   *  openVendor above: the dialog is hidden before the route fires. */
+  openWarfareVendor(npcId: number, opener?: HTMLElement | null): void;
   openTrain(npcId: number): void;
   openUnbind(npcId: number): void;
   /** Open the crafting window straight to `craftId`'s tab (the station
@@ -334,6 +338,13 @@ export class QuestDialogController {
         ),
       )
       .map((progress) => progress.questId);
+    // The WARFARE quartermaster ADDS its sectioned window (gated on the NpcDef
+    // flag, never a hard-coded id) BESIDE the generic goods row rather than
+    // replacing it: FURY shipped with a goods row, and suppressing it took
+    // selling and buyback away at an NPC that already had them. The two rows
+    // carry different labels and different accessible names, which is what the
+    // suppression was really there to avoid.
+    const hasWarfareVendor = isWarfareVendorNpc(definition);
     const hasVendor = npc.vendorItems.length > 0;
     // Station master (Professions 2.0): the resident master of a
     // crafting station (stations content masterNpcId) offers recipe training.
@@ -353,6 +364,7 @@ export class QuestDialogController {
         hasVendor,
         hasMarket,
         hasHeroicVendor,
+        hasWarfareVendor,
         hasDelveBoard,
         hasVcup: hasValeCup,
         hasCardMaster,
@@ -441,6 +453,11 @@ export class QuestDialogController {
     if (hasHeroicVendor) {
       html += `<button type="button" class="qd-list-item" data-heroic-shop="1" aria-label="${esc(t('questUi.dialog.browseGoodsAria', { name: npcName }))}"><span class="quest-complete">$</span> ${esc(t('questUi.dialog.browseGoods'))}</button>`;
     }
+    if (hasWarfareVendor) {
+      // Its OWN label and accessible name: this row sits beside the generic
+      // goods row above at a flagged NPC, so it can never reuse "Browse Goods".
+      html += `<button type="button" class="qd-list-item" data-warfare-shop="1" aria-label="${esc(t('hudChrome.warfareShop.gossipOptionAria', { name: npcName }))}"><span class="quest-complete">$</span> ${esc(t('hudChrome.warfareShop.gossipOption'))}</button>`;
+    }
     if (hasDelveBoard) {
       const delve = Object.values(DELVES).find((entry) => entry.boardNpcId === npc.templateId);
       const label = delve ? this.deps.text.delveName(delve.id) : t('delveUi.board.openDelve');
@@ -466,6 +483,7 @@ export class QuestDialogController {
     });
     this.bindRoute('[data-vendor]', (opener) => this.deps.openVendor(npc.id, opener));
     this.bindRoute('[data-heroic-shop]', (opener) => this.deps.openHeroicVendor(npc.id, opener));
+    this.bindRoute('[data-warfare-shop]', (opener) => this.deps.openWarfareVendor(npc.id, opener));
     this.bindRoute('[data-train]', () => this.deps.openTrain(npc.id));
     if (masterCraft !== null) {
       this.bindRoute('[data-crafting]', () => this.deps.openCrafting(masterCraft));

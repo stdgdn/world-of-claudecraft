@@ -6,6 +6,8 @@ import {
   ABILITIES,
   ARENA_SLOT_COUNT,
   arenaOrigin,
+  BG_SLOT_COUNT,
+  battlegroundOrigin,
   CAMPS,
   CLASSES,
   DELVE_MODULE_Z_START,
@@ -22,6 +24,7 @@ import {
   ITEM_SETS,
   instanceOrigin,
   isArenaPos,
+  isBgPos,
   isDelvePos,
   isRiftPos,
   isYumiMazePos,
@@ -35,12 +38,17 @@ import {
 import type { DelveModuleId } from '../sim/delve_layout';
 import { generateRiftFloor, riftLiftAt } from '../sim/rift/rift_gen';
 import type { BiomeId, ZoneDef } from '../sim/types';
-import { ALL_CLASSES, type Entity, type SimEvent } from '../sim/types';
-import { groundHeight, waterLevelAt, zoneBiomeAt } from '../sim/world';
+import { ALL_CLASSES, type Entity, isMechWearer, type SimEvent } from '../sim/types';
+import { groundHeight, waterLevel, waterLevelAt, zoneBiomeAt } from '../sim/world';
 import type { ChatBubbleStyle } from '../ui/chat_bubble_style';
 import { tEntity } from '../ui/entity_i18n';
 import type { IWorld } from '../world_api';
-import { AbilityVfx, AbilityVfxFx } from './ability_vfx';
+import {
+  AbilityVfx,
+  AbilityVfxFx,
+  abilityVfxTexturePrewarmSteps,
+  collectAbilityVfxCompileTargets,
+} from './ability_vfx';
 import { ABILITY_VFX_FULL_SPECS } from './ability_vfx_full_specs';
 import { ABILITY_VFX_SPECS } from './ability_vfx_specs';
 import { type AmberFeaturesView, buildAmberFeatures } from './amber_features';
@@ -50,8 +58,15 @@ import { formatResidencyBudget, residencyBudget } from './assets/residency_budge
 import type { AmbientPointSource, SpatialAudioSink, Surface } from './audio_sink';
 import { createBackgroundGpuQueue, GPU_WORK_PRIORITY } from './background_gpu_queue';
 import { attachBankerChestToNpcView } from './banker_chest';
+import { type BattlegroundView, buildBattleground } from './battleground';
+import { BattlegroundFx } from './battleground_fx';
+import { updateBattlegroundOccluderFades } from './battleground_placements';
+import { buildBattlegroundObject } from './battleground_props';
+import { ensureBiomeHazeField, setBiomeHazeCamera, setBiomeHazeGrade } from './biome_haze_field';
+import { type BiomeHazePreset, hazeLightLevel } from './biome_haze_field_core';
 import { type BirdsView, buildBirds } from './birds';
 import { type BladeGrassView, buildBladeGrass } from './blade_grass';
+import { type BladeGrassBandView, buildBladeGrassBand } from './blade_grass_band';
 import { createCameraBoom, stepCameraBoom } from './camera_boom_core';
 import {
   cancelCameraDirective,
@@ -67,9 +82,15 @@ import {
   stepCameraFeel,
   stepLandingDetector,
 } from './camera_feel_core';
+import { buildCampBraziers, type CampBraziersView } from './camp_braziers';
 import { canopyDetailPrewarmTextures } from './canopy_detail';
 import { buildCastleFeatures, type CastleFeaturesView } from './castle_features';
-import { type CharacterWeaponAura, characterWeaponAuraInto } from './character_effects';
+import { buildCelestialSprites, type CelestialSprites } from './celestial_sprites';
+import {
+  type CharacterWeaponAura,
+  characterRuneTintColor,
+  characterWeaponAuraInto,
+} from './character_effects';
 import {
   addCharacterEffectAura,
   CHARACTER_EFFECT_RECKLESSNESS,
@@ -87,10 +108,15 @@ import {
   type CharacterVisual,
   createCharacterVisual,
   createMountVisual,
+  modularLookFor,
   setWeaponVfxViewportHeight,
 } from './characters';
 import {
+  advanceSwimPitch,
+  isFallingAtSpeed,
+  isSubmergedAtDepth,
   isSwimmingAtDepth,
+  isWadingAtDepth,
   SWIM_ENTER_FEET_DEPTH,
   SWIM_EXIT_FEET_DEPTH,
   shouldTriggerWaterImpact,
@@ -113,7 +139,7 @@ import {
 } from './characters/skin_attack';
 import { shouldRetainPooledCharacterVisual } from './characters/visual_pool_policy';
 import { attackAbilityId, isSpinAttackAbility } from './characters/weapon_attack_style_core';
-import { fogFarForBuiltGround } from './chunk_residency_core';
+import { fogFarForBuiltGround, groundViewConeHalfAngle } from './chunk_residency_core';
 import { CLICK_MARKER_LIFETIME, clickMarkerAnim, clickMarkerColor } from './click_marker';
 import { buildCliffScree, type CliffScreeView } from './cliff_scree';
 import { CompileGateQueue, settlePendingSwap } from './compile_gate';
@@ -127,24 +153,33 @@ import {
   showsStaticFarMesh,
 } from './crowd_lod';
 import { daisVisualLift } from './dais_lift';
-import { currentDayNightPhase, dayNightPhaseOverride } from './day_night_clock';
+import { currentDayNightPhase, currentLunarPhase, dayNightPhaseOverride } from './day_night_clock';
 import {
   aboveHorizon,
   DAY_ONLY,
   type DayNightGrade,
   dayNightGrade,
+  duskWarmAmount,
   effectiveDayness,
   fullDayGrade,
   globalDayness,
   moonDirection,
   NEUTRAL_DAY_GRADE,
+  nightIblScale,
+  nightSkyDesat,
   nightStarAmount,
   REALM_DAYNIGHT_AMPLITUDE,
+  REALM_MOON_TINT,
+  realmLightTint,
   sunDirection,
+  sunsetWarmGate,
+  usesLiveDayNightLighting,
+  warmDuskGrade,
 } from './day_night_core';
 import { shouldPlayDeedFirework } from './deed_fx_gate';
 import { buildDelveModule } from './delve_interiors';
 import { buildDelveInteractable, syncDelveInteractableVisibility } from './delve_props';
+import { detailHorizonStarved } from './detail_horizon_core';
 import { buildDoorBody, buildRiftGateBody, buildRiftPuzzleProp } from './door_portal';
 import { createLogicalFrameDrawStats, type LogicalFrameDrawStats } from './draw_stats_core';
 import { DungeonInteriors, dungeonDaisHasRaisedPlatform, ensureDungeonAssets } from './dungeon';
@@ -156,6 +191,7 @@ import {
 } from './dynamic_resolution_core';
 import { buildEastbrookTownView, type EastbrookTownView } from './eastbrook_town';
 import { buildEmberFeatures, type EmberFeaturesView } from './ember_features';
+import { buildEmberPools, type EmberPoolsView } from './ember_pools';
 import { resolveEnvironmentPrefilterPlan } from './env_prefilter_core';
 import {
   createEnvironmentMapTransition,
@@ -168,7 +204,13 @@ import {
   ZONE_ENVIRONMENT_RESPONSE,
 } from './environment_transition_core';
 import { advanceSelfFacing, releaseSelfFacing } from './facing_smooth';
-import { buildFarTerrain, type FarTerrainView } from './far_terrain';
+import {
+  buildFarTerrain,
+  FAR_VISTA_ENTRY_MAX_WAIT_MS,
+  type FarTerrainView,
+  farVistaGate,
+  setFarTerrainNightGrade,
+} from './far_terrain';
 import {
   detailCullFar,
   type FarVistaPlan,
@@ -184,9 +226,11 @@ import { FishingBobberVisual } from './fishing_bobber';
 import {
   buildFoliage,
   buildFoliageMaterialPrewarmGroup,
+  clearFoliageShadowVolume,
   type FoliagePerfStats,
   type FoliageView,
   foliageResidencySources,
+  setFoliageShadowVolume,
 } from './foliage';
 import { activeFarFieldPolicy } from './foliage_impostor';
 import {
@@ -211,8 +255,14 @@ import {
   urlForcedTier,
 } from './gfx';
 import { GlacialFrontVisual } from './glacial_front_visual';
+import { bakeGrassGroundTexture, setGrassGroundBake } from './grass_ground_bake';
 import { buildGreatTreePrewarmGroup } from './great_tree_prewarm';
 import { GroundAimReticleVisual } from './ground_aim_reticle_visual';
+import {
+  type PooledObjectView,
+  storePooledObject as storeGroundObjectInPool,
+  takeOrBuildGroundObject,
+} from './ground_object_pool';
 import { createGroundTilt, type GroundTiltState, stepGroundTilt } from './ground_tilt_core';
 import { buildHauntFeatures, type HauntFeaturesView } from './haunt_features';
 import { buildHollowGates } from './hollow_gates';
@@ -238,6 +288,7 @@ import {
 } from './mage_barrier_visual';
 import { MageGroundFx } from './mage_ground_fx';
 import { buildMailboxPillar } from './mailbox';
+import { buildMobNightGlow, type MobNightGlowView } from './mob_night_glow';
 import { buildMotes, type MotesView } from './motes';
 import { MountBeacon } from './mount_beacon';
 import { mountBobY, mountVisualSpec } from './mount_visuals';
@@ -247,7 +298,21 @@ import {
   nameplateScreenTransform,
 } from './nameplate_projection';
 import { facingAlpha, remoteEntityAlpha } from './net_interp_core';
+import { buildNightAccents, type NightAccentsView } from './night_accents';
 import { buildNightFeatures, type NightFeaturesView } from './night_features';
+import {
+  ensureNightLightField,
+  hasNightLightField,
+  updateNightLightField,
+} from './night_light_field';
+import { collectBodyNightLights, type NightLightSite } from './night_light_field_core';
+import {
+  lampGlowAmount,
+  mobGlowAmount,
+  nightLightAmount,
+  nightRimBoost,
+  wildGlowAmount,
+} from './night_lighting_core';
 import { buildEastbrookNoticeboard } from './noticeboard';
 import {
   type OpaqueSortPolicyInput,
@@ -280,6 +345,7 @@ import {
   type PrewarmPolicy,
   partitionMandatoryLandmarkCandidates,
   prewarmBuildDeadline,
+  prewarmEntryResumesAfterSkip,
   prewarmEntryRuns,
   prewarmEntryShouldDefer,
   remainingPrewarmViewBudget,
@@ -334,6 +400,7 @@ import { freezeStaticMatrices, freezeStaticSubtreeMatrices } from './static_matr
 import { buildStationProps } from './stations';
 import { shouldRenderStealthGhost } from './stealth';
 import { createStepSmooth, type StepSmoothState, stepSmoothHeight } from './step_smooth_core';
+import { buildStreetlamps, type StreetlampsView } from './streetlamps';
 import { buildFlaredConeFan, buildRingXZ, drapeConeWorld } from './target_cone_debug';
 import {
   syncTemporalHourglassVisual,
@@ -341,11 +408,17 @@ import {
   type TemporalHourglassMode,
   type TemporalHourglassVisual,
 } from './temporal_hourglass_visual';
-import { buildTerrain, type TerrainView } from './terrain';
+import { buildTerrain, hasTerrainSplatAssets, type TerrainView } from './terrain';
 import { uploadDataTextureInChunks } from './texture_upload';
 import { sparkleTexture } from './textures';
 import { targetIntensityFromValues } from './travel_speed_fx';
 import { TravelSpeedFxPainter } from './travel_speed_fx_painter';
+import {
+  UNDERWATER_FOG_COLOR,
+  UNDERWATER_FOG_FAR,
+  UNDERWATER_FOG_NEAR,
+  UnderwaterView,
+} from './underwater';
 import {
   BALL_RADIUS,
   buildValeCupBall,
@@ -371,9 +444,21 @@ import {
   warriorCastVisualPlan,
 } from './warrior_cast_fx_core';
 import { RecklessSkullPainter } from './warrior_cast_fx_painter';
-import { buildWater, type WaterView } from './water';
+import { buildWater, setWaterDayNight, setWaterSunDirection, type WaterView } from './water';
 import { buildWaterFlora } from './water_flora';
+import {
+  buildWeaponVfxPrewarmGroup,
+  disposeWeaponEmissiveCache,
+  weaponVfxPrewarmTextures,
+} from './weapon_vfx';
+import {
+  resolveQueuedSkinLookup,
+  WEAPON_SKIN_APPLIES_PER_FRAME,
+  type WeaponSkinApplyDecision,
+  WeaponSkinApplyQueue,
+} from './weapon_vfx_apply_queue_core';
 import { Weather } from './weather';
+import { precipForBiome } from './weather_field_core';
 import { buildWorldAmbientSources, crowdAmbienceAt, footstepSurfaceAt } from './world_audio';
 import { surfaceDetailPrewarmTextures } from './worn_stone';
 import { buildYumiMaze, type YumiMazeView } from './yumi_maze';
@@ -502,6 +587,15 @@ const FOOT_STRIDE_RUN = 1.55;
 // is intentionally longer than an on-foot stride and leaves the one-shot tail clear.
 const MOUNT_STRIDE_RUN = 5.8;
 const SWIM_STRIDE = 2.4;
+// Surface kick: beats per second at a standstill, quickening with swim speed,
+// and how far behind the pivot the prone body's feet trail (as a fraction of
+// stand height — the authored stroke lays the legs out behind the hips).
+const SWIM_KICK_HZ = 2.6;
+const SWIM_FOOT_TRAIL = 0.19;
+// Depth below the waterline over which the underwater wash fades fully in.
+const UNDERWATER_FADE_DEPTH = 0.45;
+// How far under the line the chase camera is pulled while the player is submerged.
+const UNDERWATER_CAMERA_DIP = 0.5;
 const FOOT_RUN_SPEED = 4.5; // u/s — matches the run threshold in characters/anim_state.ts
 // fire/torch point lights beyond this never shine (their falloff range is
 // shorter anyway); the nearest GFX.maxPointLights within it win the budget
@@ -592,15 +686,21 @@ const MOON_HEMI_SKY_COLOR = 0x8b9cd0; // cool sky bounce at deepest night
 const MOON_HEMI_GROUND_COLOR = 0x2b3350; // dark cool ground bounce at deepest night
 const NIGHT_SUN_COOL = 0.55; // how far the sun hue shifts to moonlight at full night
 const NIGHT_HEMI_COOL = 0.5; // how far the sky-bounce hue shifts at full night
-// golden tone the sun light warms toward, strongest as the sun nears the horizon
-const WARM_SUN_COLOR = 0xff8a3a;
+// golden tone the sun light warms toward, strongest as the sun nears the
+// horizon: a deep sunset orange, so dawn and dusk read hot like the real thing
+const WARM_SUN_COLOR = 0xff7a28;
 // A shared warm daylight bias applied after each biome picks its authored hue.
-// Keeping this below 0.2 preserves Frostveil, Wraithwood, and Galecrest as cool
-// realms while stopping their HDRI/hemisphere fill from cooling the whole frame.
+// The sky bounce is the frame's ambient fill, so this is the knob that decides
+// whether ordinary daylight reads golden or clinical, and the first cut at 0.18
+// left it clinical. These weights blend TOWARD a cream, never past it, so the
+// cool realms stay cool by construction: at 0.3 a Frostveil noon still resolves
+// blue-dominant (its bounce lands near rgb 193,196,207), it just stops washing
+// the whole frame grey-blue. Both terms are scaled by (1 - nightAmt) at the
+// call site, so none of this warmth reaches the moonlit night.
 const WARM_HEMI_SKY_COLOR = 0xffdfbd;
 const WARM_HEMI_GROUND_COLOR = 0x725038;
-const DAY_HEMI_SKY_WARMTH = 0.18;
-const DAY_HEMI_GROUND_WARMTH = 0.13;
+const DAY_HEMI_SKY_WARMTH = 0.3;
+const DAY_HEMI_GROUND_WARMTH = 0.22;
 // the moving sun/moon key light rides at the same distance the fixed anchor did
 const SUN_TRAVEL_DISTANCE = SUN_ANCHOR.length();
 // character rim glow scales up underground so silhouettes split from the murk
@@ -842,11 +942,6 @@ export interface RendererPrewarmStats {
   diagnosticsBaseline: RendererPrewarmDiagnosticsBaselineStats | null;
 }
 
-interface PooledObjectView {
-  group: THREE.Group;
-  height: number;
-}
-
 interface ClickMarkerSlot {
   group: THREE.Group;
   ring: THREE.Mesh;
@@ -892,6 +987,7 @@ export interface EntityView {
   offhandItemId: string | null; // last-rendered shield/second weapon, independent of mainhand skins
   weaponSkinId: string | null; // last-rendered weapon-skin cosmetic, diffed for live skin swaps
   weaponStowed: boolean; // last-rendered sheathe state (Z key), diffed for live stow toggles
+  helmHidden: boolean; // last-rendered paperdoll eye toggle, diffed to recompose the kit helm
   /** unscaled height, nameplate/vfx anchor reads height * e.scale */
   height: number;
   /** last-applied entity scale (group.scale); diffed each frame for live size buffs */
@@ -932,6 +1028,10 @@ export interface EntityView {
   // render-space position last frame, for true u/s locomotion speed
   lastX: number;
   lastZ: number;
+  // ...and the vertical one, which only swimming reads: it drives how far the
+  // body noses over into a dive or a climb (anim_state.advanceSwimPitch).
+  lastY: number;
+  swimPitch: number;
   // locomotion-state hysteresis so a one-frame speed dip can't reset the
   // walk clip (see locomotion.ts)
   loco: LocoTrack;
@@ -946,6 +1046,14 @@ export interface EntityView {
   waterContactAccum: number;
   wasAirborne: boolean;
   wasSwimming: boolean;
+  // feet under the waterline but the ground still under them (the wade latch)
+  wasWading: boolean;
+  // head under the waterline (the stroke + VFX latch, hysteresis in anim_state)
+  wasSubmerged: boolean;
+  // long-fall flail latch (hysteresis in anim_state.isFallingAtSpeed)
+  wasFalling: boolean;
+  // surface-kick beat, 0..1 per splash (never advanced while submerged)
+  swimKickPhase: number;
   // consecutive frames the foot-height heuristic read airborne (debounce)
   airborneHeurFrames: number;
   // mount summon/dismount transition edge-detects. lastMountKey fires the summon
@@ -1171,6 +1279,12 @@ function canvasDataUrlAsync(
 export interface RendererCreateOptions {
   context?: WebGL2RenderingContext;
   initializeGfx?: boolean;
+  /** Build the far-vista grid eagerly during construction (macrotask bites,
+   *  accelerateInitialBuild). Correct only behind an opaque curtain: the
+   *  boot and graphics-rebuild paths keep the default; the editor viewport,
+   *  which rebuilds a live Renderer against running frames on every document
+   *  load, passes false to stay on polite idle pacing. */
+  eagerFarVista?: boolean;
 }
 
 export class Renderer {
@@ -1399,12 +1513,16 @@ export class Renderer {
     moving: false,
     running: false,
     airborne: false,
+    falling: false,
     backwards: false,
     reverseBackpedal: false,
     dead: false,
     casting: false,
     spinning: false,
     swimming: false,
+    submerged: false,
+    swimPitch: 0,
+    wading: false,
     sitting: false,
   };
   // Second scratch for the mount rig: the rider's state minus the rider-only
@@ -1414,11 +1532,15 @@ export class Renderer {
     moving: false,
     running: false,
     airborne: false,
+    falling: false,
     backwards: false,
     reverseBackpedal: false,
     dead: false,
     casting: false,
     swimming: false,
+    submerged: false,
+    swimPitch: 0,
+    wading: false,
     sitting: false,
   };
   private selfRenderPosition = new THREE.Vector3();
@@ -1457,6 +1579,7 @@ export class Renderer {
   private skyView!: SkyView;
   private sunSprites: THREE.Sprite[] = [];
   private moonSprites: THREE.Sprite[] = [];
+  private celestialSprites: CelestialSprites | null = null;
   private sunDir = new THREE.Vector3();
   // the moving moon direction plus how far above the horizon each body sits
   // (0 down, 1 up); recomputed each frame in updateAmbience from the world clock
@@ -1468,6 +1591,11 @@ export class Renderer {
   private starAmt = 0; // 0 day, 1 deep night: star-field strength for the sky dome
   private waterView: WaterView;
   private lastWaterSimulationPasses = 0;
+  // The waterRipples setting (default off), threaded in via setWaterRipples
+  // because render modules never read the settings store directly. Held here
+  // so an editor water rebuild re-applies the player's choice to the fresh
+  // WaterView.
+  private waterRipplesEnabled = false;
   private terrainView: TerrainView;
   // Map-editor placed GLB assets; null when the world has none and the editor
   // never asked for the view (the shipped game with the built-in world).
@@ -1477,6 +1605,7 @@ export class Renderer {
   private fish: FishView;
   private motes: MotesView;
   private bladeGrass: BladeGrassView;
+  private bladeGrassBand: BladeGrassBandView;
   private cliffScree: CliffScreeView;
   private birds: BirdsView;
   private impactSite: ImpactSiteView;
@@ -1487,16 +1616,38 @@ export class Renderer {
   private fenFeatures: FenFeaturesView | null = null;
   private amberFeatures: AmberFeaturesView | null = null;
   private nightFeatures: NightFeaturesView | null = null;
+  private streetlamps: StreetlampsView | null = null;
+  private emberPools: EmberPoolsView | null = null;
+  private campBraziers: CampBraziersView | null = null;
+  private nightAccents: NightAccentsView | null = null;
+  private mobNightGlow: MobNightGlowView | null = null;
+  // Pooled scratch for the night light field's dynamic entries (the body
+  // collector rewrites it each frame; entries past the count are stale).
+  private nightBodyLights: NightLightSite[] = [];
+  private nightBodyLightCount = 0;
   private hauntFeatures: HauntFeaturesView | null = null;
   private jungleFeatures: JungleFeaturesView | null = null;
   private gardenFeatures: GardenFeaturesView | null = null;
   private galeFeatures: GaleFeaturesView | null = null;
   private fogScratch = new THREE.Color();
+  // Blue wash + bubbles while the CAMERA is under a waterline, and the eased
+  // 0..1 that drives them (and the fog override in updateUnderwater).
+  private underwaterView!: UnderwaterView;
+  private underwaterBlend = 0;
+  // Last frame's submerged read for the LOCAL player, set in sync(). Drives the
+  // camera dip below; one frame of lag is invisible at swim speeds.
+  private selfSubmerged = false;
   // world day/night grade, recomputed each frame from the UTC-anchored clock in
   // updateAmbience and consumed by the outdoor fog/light easing, the sky dome,
   // and the IBL intensity. Defaults to full day for the frames before the first
   // updateAmbience runs.
   private dnGrade: DayNightGrade = fullDayGrade();
+  // How far into night the shared WORLD clock is (1 - globalDayness), before any
+  // realm amplitude compresses it, and 0 on a tier that never applies the grade.
+  // The night-visibility layers (streetlamps, the mob ground glow, the character
+  // rim lift) all key off this one number so they light up together in every
+  // realm; see night_lighting_core.ts for why it is the global amount.
+  private dnGlobalNight = 0;
   private fixedLowDayBiome: BiomeId | null = null;
   private dnColorScratch = new THREE.Color();
   private dnMoonScratch = new THREE.Color();
@@ -1554,6 +1705,10 @@ export class Renderer {
   // One shared lane for background work that touches WebGL. Idle callbacks from
   // independent zone/sky/archetype tasks can otherwise all start in one frame.
   private backgroundGpuWork = createBackgroundGpuQueue();
+  // Serial tail for spirit-puppet construction: several models resolve at once
+  // when a class is first sighted, so the builds queue behind one another and
+  // each spends its own idle slot instead of stacking into one combat frame.
+  private spiritBuildLane: Promise<unknown> = Promise.resolve();
   // Static terrain/water/features just beyond the current zone are built in a
   // single background lane when their rectangles enter the relaxed fog
   // horizon, so a walked boundary crossing lands on already-resident ground.
@@ -1580,6 +1735,24 @@ export class Renderer {
   private farVista: FarVistaPlan;
   private farTerrainView!: FarTerrainView;
   private detailFogFar: number;
+  // Scratch for the residency clamp's view wedge: the camera forward the clamp
+  // reads, kept off the shared tmpV pool because updateAmbience runs in the
+  // middle of sync's entity work and must not disturb it.
+  private residencyForward = new THREE.Vector3();
+  private readonly residencyCone: { forwardX: number; forwardZ: number; halfAngle: number } = {
+    forwardX: 0,
+    forwardZ: 0,
+    halfAngle: Math.PI / 2,
+  };
+  /** The boot far-grid build, accelerated behind the entry curtain; the
+   *  entry gate (farVistaReady) awaits it. Editor terrain rebuilds mint a
+   *  new view but deliberately keep polite pacing and never re-arm this. */
+  private farVistaInitialBuild: Promise<void> = Promise.resolve();
+  /** Set by farVistaReady once the grid stands pre-reveal: the next outdoor
+   *  environment update settles scene fog at the horizon haze band instead
+   *  of easing it out on screen (fog only; the detail horizon stays
+   *  residency-governed). */
+  private vistaEntrySettlePending = false;
   /** Fired whenever a zone becomes resident (any prepare path). Wired by
    *  main.ts so presentation caches outside the renderer (the HUD's world-map
    *  background) prewarm alongside the zone itself. */
@@ -1604,6 +1777,9 @@ export class Renderer {
   private asyncCompileSupported = false;
   private readonly liveCompileGates = new CompileGateQueue(this.backgroundGpuWork);
   vfx: Vfx;
+  // Thornhollow Fields flag/rune per-frame dressing + transition bursts; runs off
+  // bgInfo and view userData only (battleground_fx.ts).
+  private bgFx!: BattlegroundFx;
   private raceLine: RaceLine;
   private mountBeacon: MountBeacon;
   // Per-ability spell VFX subsystem: the spec-driven painter plus the pooled
@@ -1679,6 +1855,10 @@ export class Renderer {
   private lowGfx: boolean;
   private post: PostPipeline | null = null;
   private godRays: THREE.Sprite[] = [];
+  // Eased per-biome god-ray strength (BIOME_GOD_RAYS via updateAmbience): the
+  // shafts are "sun through bright air" and read as detached glowing streaks
+  // over the twilight and gloom realms, so those fade them out entirely.
+  private godRayZoneScale = 1;
   private viewport = { width: 1, height: 1 };
   private viewportPollTimer = 0;
   private nameplateTimer = 0;
@@ -1740,6 +1920,7 @@ export class Renderer {
   private visualPool = new Map<string, CharacterVisual[]>();
   private pooledVisualCount = 0;
   private objectPool = new Map<string, PooledObjectView[]>();
+  private pooledObjectCount = 0;
   private prewarmDepthMaterials = new Map<string, THREE.MeshDepthMaterial>();
   private readonly canvas: HTMLCanvasElement;
   private unregisterWebGLContext: (() => void) | null = null;
@@ -1863,6 +2044,21 @@ export class Renderer {
     // distant coasts. The plan comes through the ONE far-field policy so
     // the vista can never enable on a profile the sprite arm rejects.
     this.farVista = activeFarFieldPolicy().vista;
+    // Meadow continuum: bake the blade-cluster ground texture BEFORE any
+    // terrain material builds (near splat and far tiles both read the
+    // singleton at material-build time). A few milliseconds, once per
+    // session. Gated on the same predicate that picks the near splat
+    // material: when the near terrain runs the Lambert arm (low tier, the
+    // Advanced Terrain Detail=Low dial, or a failed splat-asset preload),
+    // the far tiles must stay legacy too, or the horizon would be painted
+    // meadow while the ground underfoot is not.
+    if (GFX.terrainSplat && hasTerrainSplatAssets()) {
+      try {
+        setGrassGroundBake(bakeGrassGroundTexture(this.webgl, this.sim.cfg.seed));
+      } catch {
+        setGrassGroundBake(null); // headless/stub GL: keep the legacy ground
+      }
+    }
     this.camera = new THREE.PerspectiveCamera(
       CAMERA_BASE_FOV,
       this.viewport.width / this.viewport.height,
@@ -1895,6 +2091,36 @@ export class Renderer {
       LOW_GFX ? 325 : 700,
     );
     this.detailFogFar = (this.scene.fog as THREE.Fog).far;
+
+    // The biome haze field, built BEFORE any surface that samples it (the
+    // terrain layers, the water and the sky dome all gate their shader patch
+    // on its existence at compile time, and buildSky below is the earliest
+    // consumer). Sourced from this renderer's own outdoor fog presets plus
+    // the light rig's intensity scales and the always-on precipitation table,
+    // so the atmosphere a zone shows from across the world (colour, light
+    // level, weather veil) is literally the one the player meets on entry.
+    // Vista tiers only: the fogged arm already carries per-biome aerial
+    // perspective in scene fog itself.
+    if (this.farVista.enabled && !this.lowGfx) {
+      const hazePresets = {} as Record<BiomeId, BiomeHazePreset>;
+      for (const biome of Object.keys(Renderer.BIOME_FOG) as BiomeId[]) {
+        const fog = Renderer.BIOME_FOG[biome];
+        const light = Renderer.BIOME_LIGHT[biome];
+        hazePresets[biome] = {
+          color: fog.color,
+          far: fog.far,
+          light: hazeLightLevel(light.sunScale, light.hemiScale, light.envScale),
+          precip: precipForBiome(biome) ?? undefined,
+        };
+      }
+      ensureBiomeHazeField(hazePresets);
+    }
+    // The night light field must decide before any splat material compiles:
+    // the terrain gates its shader patch on hasNightLightField() at compile
+    // time (the biome-haze contract). Lamps, camp fires, and bodies register
+    // their entries later, at their own build steps; the registry is read per
+    // frame, not at compile.
+    ensureNightLightField();
 
     // sky dome, follows the camera so the world strip never outruns it.
     // High tier: shader gradient + sun glow with biome-aware horizon tints;
@@ -1991,75 +2217,18 @@ export class Renderer {
     this.cullCharacters = !sun.castShadow;
     this.sunDir.copy(SUN_DIR);
 
-    // visible sun disc + bloom halo
-    // The sun and moon are billboard sprites: always camera-facing, so they read
-    // as perfect circles wherever they sit on screen (a dome-shader disc would
-    // project to an ellipse off-axis). Each is a crisp filled disc plus a soft
-    // glow; the renderer aims them along the sun/moon direction each frame and
-    // fades them by how far the body is above the horizon.
-    const discTex = (r: number, g: number, b: number): THREE.CanvasTexture => {
-      const cv = document.createElement('canvas');
-      cv.width = cv.height = 128;
-      const ctx = cv.getContext('2d');
-      if (!ctx) throw new Error('2D canvas context unavailable');
-      const grad = ctx.createRadialGradient(64, 64, 0, 64, 64, 60);
-      grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 1)`);
-      grad.addColorStop(0.82, `rgba(${r}, ${g}, ${b}, 1)`); // solid plateau = crisp disc
-      grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`); // feathered rim to anti-alias the edge
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 128, 128);
-      return new THREE.CanvasTexture(cv);
-    };
-    const glowTex = (r: number, g: number, b: number): THREE.CanvasTexture => {
-      const cv = document.createElement('canvas');
-      cv.width = cv.height = 128;
-      const ctx = cv.getContext('2d');
-      if (!ctx) throw new Error('2D canvas context unavailable');
-      const grad = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-      grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.5)`);
-      grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 128, 128);
-      return new THREE.CanvasTexture(cv);
-    };
-    const makeCelestialSprite = (
-      tex: THREE.CanvasTexture,
-      scale: number,
-      opacity: number,
-      blending: THREE.Blending = THREE.AdditiveBlending,
-      renderOrder = -9,
-    ): THREE.Sprite => {
-      const sp = new THREE.Sprite(
-        new THREE.SpriteMaterial({
-          map: tex,
-          transparent: true,
-          fog: false,
-          depthWrite: false,
-          depthTest: false,
-          blending,
-          opacity,
-        }),
-      );
+    // visible sun disc + bloom halo. The sprite construction (cratered moon
+    // face, HDR sun core that crosses the bloom threshold, corona + glare
+    // streak) lives in celestial_sprites.ts; the renderer owns scene entry and
+    // the per-frame aim/fade (updateCelestialSprites).
+    const celestial = buildCelestialSprites(LOW_GFX);
+    this.celestialSprites = celestial;
+    this.sunSprites = celestial.sunSprites;
+    this.moonSprites = celestial.moonSprites;
+    for (const sp of [...this.sunSprites, ...this.moonSprites]) {
       setRenderCategory(sp, 'sky');
-      sp.scale.set(scale, scale, 1);
-      sp.renderOrder = renderOrder;
-      sp.frustumCulled = false; // rides the camera at a fixed offset; never cull it
-      sp.userData.baseOpacity = opacity;
       this.scene.add(sp);
-      return sp;
-    };
-    // sun: a warm disc under a soft warm glow
-    this.sunSprites = [
-      makeCelestialSprite(glowTex(255, 214, 150), 150, LOW_GFX ? 0.6 : 0.3),
-      makeCelestialSprite(discTex(255, 224, 168), 42, 0.9),
-    ];
-    // moon: a bright cratered face (normal-blended so the maria read as dark)
-    // under a soft cool additive glow kept modest so it does not wash the face
-    // moon: a plain bright disc (as bright as the stars) under a soft cool glow
-    this.moonSprites = [
-      makeCelestialSprite(glowTex(150, 170, 220), 128, 0.22),
-      makeCelestialSprite(discTex(247, 250, 255), 52, 1),
-    ];
+    }
 
     // god-ray shafts: elongated additive gradient sprites hanging sunward of
     // the camera; opacity follows how directly the camera faces the sun
@@ -2145,11 +2314,22 @@ export class Renderer {
     });
     setRenderCategory(this.farTerrainView.group, 'terrain');
     this.scene.add(this.farTerrainView.group);
+    // The curtained construction paths (boot, graphics rebuild) build the
+    // far grid eagerly: it overlaps the curtain's own asset waits and the
+    // vista stands before the reveal instead of tens of seconds into play
+    // on a loaded production client. The editor viewport constructs live
+    // Renderers with frames running and opts out (eagerFarVista false),
+    // keeping its rebuilds on polite idle pacing.
+    this.farVistaInitialBuild =
+      options.eagerFarVista === false
+        ? Promise.resolve()
+        : this.farTerrainView.accelerateInitialBuild();
     bd('terrain');
     this.waterView = buildWater(this.sim.cfg.seed, this.webgl);
     setRenderCategory(this.waterView.group, 'water');
     this.scene.add(this.waterView.group);
     freezeStaticSubtreeMatrices(this.waterView.group); // water animates via uniforms, never transforms
+    this.waterView.setWavesEnabled(this.waterRipplesEnabled);
     bd('water');
 
     this.foliage = buildFoliage(this.sim.cfg.seed, this.webgl);
@@ -2158,7 +2338,7 @@ export class Renderer {
     bd('foliage');
     this.fish = buildFish(this.sim.cfg.seed, (x, z, radius, strength) => {
       this.waterView.addSplash(x, z, radius, strength);
-      const level = waterLevelAt(x, z);
+      const level = waterLevelAt(x, z, this.sim.cfg.seed);
       if (Number.isFinite(level)) {
         this.vfx.waterSplash(x, level, z, radius, strength);
       }
@@ -2175,6 +2355,14 @@ export class Renderer {
       this.sim.player.pos.z,
     );
     this.scene.add(this.bladeGrass.group);
+    // the meadow-continuum blade band: the same clusters carried out to the
+    // band radius over the painted ground (blade_grass_band.ts)
+    this.bladeGrassBand = buildBladeGrassBand(
+      this.sim.cfg.seed,
+      this.sim.player.pos.x,
+      this.sim.player.pos.z,
+    );
+    this.scene.add(this.bladeGrassBand.group);
     // boulders on the steep-slope band; cliffs stop being bare wedges
     this.cliffScree = buildCliffScree(this.sim.cfg.seed);
     this.scene.add(this.cliffScree.group);
@@ -2308,6 +2496,39 @@ export class Renderer {
     this.flames.push(...stationProps.flames);
     this.fireLights.push(...stationProps.fireLights);
     bd('stations');
+
+    // Town streetlamps: world-spanning dressing, so it is built here with the
+    // rest of it rather than lazily per biome (every zone has a hub, so a
+    // per-biome gate would build the whole set within a couple of zones anyway).
+    // Each town is its own cull group, so only the town the player is standing
+    // in submits draws; its point lights join the shared fire-light budget.
+    this.streetlamps = buildStreetlamps(this.sim.cfg.seed);
+    this.attachZoneFeature(this.streetlamps);
+    // Warm ground pools under nearby characters after dark. Camera-band sized
+    // and rewritten every frame from the entity loop, so it is NOT a zone
+    // feature: it is a pooled overlay the sync loop fills.
+    this.mobNightGlow = buildMobNightGlow();
+    setRenderCategory(this.mobNightGlow.group, 'ui3d');
+    this.scene.add(this.mobNightGlow.group);
+    // Ember pools at every authored campfire: static, so they bucket per zone
+    // and ride the same distance cull as the lamps.
+    this.emberPools = buildEmberPools(this.sim.cfg.seed);
+    this.attachZoneFeature(this.emberPools);
+    // Fire braziers at every mob camp without an authored campfire: a real
+    // burning fixture, so a camp's light has a source you can walk up to. The
+    // flames join the shared scenery-flame pass (freeze runs first, so their
+    // matrixAutoUpdate is re-armed here, the stationProps pattern) and the
+    // lights join the shared fire-light budget via attachZoneFeature.
+    this.campBraziers = buildCampBraziers(this.sim.cfg.seed);
+    this.attachZoneFeature(this.campBraziers);
+    for (const flame of this.campBraziers.flames) flame.matrixAutoUpdate = true;
+    this.flames.push(...this.campBraziers.flames);
+    // The streamed wilderness layer (glow flora + fireflies) follows the camera
+    // and rebuilds on a cell crossing, so it is NOT a zone feature.
+    this.nightAccents = buildNightAccents(this.sim.cfg.seed);
+    setRenderCategory(this.nightAccents.group, 'props');
+    this.scene.add(this.nightAccents.group);
+    bd('night-accents');
     // One residency table at the end of the build (dev console): where the
     // decoded bytes sit at exactly the point the iPhone 17 Pro is killed.
     // Scene first so shared buffers/images attribute to the live world, then
@@ -2488,7 +2709,7 @@ export class Renderer {
     // fishingBite event flips the owner's into the bite state (handleEvent).
     this.fishingBobbers = new FishingBobberVisual(this.scene, (x, z, radius, strength) => {
       this.waterView.addSplash(x, z, radius, strength);
-      const level = waterLevelAt(x, z);
+      const level = waterLevelAt(x, z, this.sim.cfg.seed);
       if (Number.isFinite(level)) {
         this.vfx.waterSplash(x, level, z, radius, strength);
       }
@@ -2547,6 +2768,9 @@ export class Renderer {
     };
     this.vfx = new Vfx(this.scene, vfxAnchor);
     this.vfx.setViewportScale(this.webgl.domElement.clientHeight * this.webgl.getPixelRatio(), 60);
+    this.bgFx = new BattlegroundFx(this.sim, this.views, this.vfx);
+    this.underwaterView = new UnderwaterView(this.lowGfx);
+    this.scene.add(this.underwaterView.group);
     this.abilityVfxFx = new AbilityVfxFx(
       this.scene,
       this.camera,
@@ -2561,6 +2785,7 @@ export class Renderer {
       this.webgl.domElement.clientHeight * this.webgl.getPixelRatio(),
       60,
     );
+    this.abilityVfxFx.setSpiritBuildScheduler((build) => this.queueSpiritPuppetBuild(build));
     this.abilityVfx = new AbilityVfx({
       vfx: this.vfx,
       fx: this.abilityVfxFx,
@@ -2775,6 +3000,16 @@ export class Renderer {
     this.visualPool.clear();
     this.pooledVisualCount = 0;
     this.objectPool.clear();
+    this.pooledObjectCount = 0;
+    // The memoized weapon-skin emissive derivations are renderer-lifetime, not
+    // page-lifetime: they are shared across wearers, so no individual rig may
+    // release them, and a megabyte-class texture pair per skin would otherwise
+    // ride a WebGL context recycle into the next context. Safe here and only
+    // here, after every view (and every rig that borrowed them) is torn down
+    // above. Best-effort like its neighbours: nothing in terminal cleanup may
+    // abort the WebGL disposal below.
+    bestEffort(() => this.weaponSkinApplies.clear());
+    bestEffort(() => disposeWeaponEmissiveCache());
     this.clickTargets.length = 0;
     this.gatherNodeMeshes = [];
     this.viewLights.length = 0;
@@ -3052,7 +3287,12 @@ export class Renderer {
       return Promise.resolve();
     }
     const pending = this.pendingZonePrepares.get(zoneId);
-    if (pending) return pending;
+    if (pending) {
+      // A gating caller (teleport, login) joining a background prepare must
+      // not wait at idle pace behind the loading screen.
+      if (opts?.pace !== 'idle') this.terrainView.escalateZone(zoneId);
+      return pending;
+    }
     const zone = zoneAt(x, z);
     const idlePace = opts?.pace === 'idle';
     const task = (async () => {
@@ -4324,9 +4564,12 @@ export class Renderer {
     const p = this.sim.player;
     this.time += dt;
     sharedUniforms.uTime.value = this.time;
+    // the paint-free carpet ring the terrain splat reads (see terrain.ts)
+    sharedUniforms.uCarpetRing.value.set(p.pos.x, p.pos.z, GFX.bladeCarpetRadius);
     this.tmpV.set(p.pos.x, p.pos.y, p.pos.z);
     this.updateCamera(this.tmpV, dt);
     this.updateAmbience(p.pos.x, this.camera.position.y, dt);
+    this.updateUnderwater(dt);
     this.budgetFireLights(p.pos.x, p.pos.z);
     const fogFar = this.subsystemCullFar();
     // The foliage handoff keys off distance planes (foliage_impostor_core.ts /
@@ -4345,6 +4588,7 @@ export class Renderer {
       this.camera.position.x,
       this.camera.position.z,
       fogFar,
+      this.camera.position.y,
     );
     this.terrainView.update(this.camera.position.x, this.camera.position.z, fogFar);
     this.farTerrainView.update(
@@ -4438,12 +4682,19 @@ export class Renderer {
       this.valeCupStadium.updateShadowVisibility(this.camera, this.shadowLightDirection, true);
     }
     this.sky.position.set(this.camera.position.x, 0, this.camera.position.z);
-    // The dome rides the camera, so it also serves Wildheart's open-air field.
-    this.sky.visible = this.fogState === 'outdoor' || this.fogState === 'wildheartField';
+    // The dome rides the camera, so it serves every open-air state: the
+    // overworld, Wildheart's field, and the Thornhollow Fields hollow (hiding
+    // it there left a black void above the ramparts).
+    this.sky.visible = this.isOpenAirFog();
     if (this.sky.visible) {
       this.skyView.setCameraPos(this.camera.position.x, this.camera.position.z, dt);
       if (!this.lowGfx) {
         this.skyView.setDayNight(this.dnGrade.sky);
+        this.skyView.setCycle(
+          this.sunDir,
+          duskWarmAmount(this.sunDir.y),
+          nightSkyDesat(this.dnGrade.nightAmt),
+        );
         this.skyView.setFog((this.scene.fog as THREE.Fog).color);
         this.skyView.setStars(this.starAmt, this.time);
         this.updateEnvBiome(dt);
@@ -4544,30 +4795,17 @@ export class Renderer {
     return `object:${e.objectItemId}`;
   }
 
-  private takePooledObject(key: string): PooledObjectView | null {
-    const pool = this.objectPool.get(key);
-    const object = pool?.pop() ?? null;
-    if (!object) return null;
-    object.group.removeFromParent();
-    object.group.visible = true;
-    object.group.position.set(0, 0, 0);
-    object.group.rotation.set(0, 0, 0);
-    object.group.scale.set(1, 1, 1);
-    return object;
-  }
-
   private storePooledObject(key: string, object: PooledObjectView): void {
-    object.group.removeFromParent();
-    object.group.visible = false;
-    object.group.position.set(0, 0, 0);
-    object.group.rotation.set(0, 0, 0);
-    object.group.scale.set(1, 1, 1);
-    let pool = this.objectPool.get(key);
-    if (!pool) {
-      pool = [];
-      this.objectPool.set(key, pool);
-    }
-    pool.push(object);
+    // Unlike the character-visual pool, an overflow view has nothing to .dispose(): its
+    // geometry/materials are shared per-item-template references (owned elsewhere), so
+    // simply not pooling it drops the only reference to its Group/Object3D graph and lets
+    // GC reclaim it. Without this cap every distinct harvest node/loot pile/quest pickup a
+    // player interacted with stayed retained for the rest of the session on every platform.
+    // shouldRetainPooledCharacterVisual is a generic bounded-retention check (currentCount
+    // < maxCount, Infinity-safe); reused here rather than duplicating it under a second name.
+    if (!shouldRetainPooledCharacterVisual(this.pooledObjectCount, GFX.maxPooledObjects)) return;
+    storeGroundObjectInPool(this.objectPool, key, object);
+    this.pooledObjectCount++;
   }
 
   private templateIdsInZone(zone: ZoneDef, kind: 'mob' | 'npc'): string[] {
@@ -4696,15 +4934,16 @@ export class Renderer {
       }
     }
     // One EXTRA rig per class wearing the ability-VFX aura glow: setAuraGlow's
-    // on-edge swaps the rig materials for private clones, and on the tinted
-    // player rigs that clone links a NEW program. Without this seed the FIRST
-    // spec'd cast of a session compiles it synchronously mid-frame - the
+    // on-edge swaps the rig materials for private clones, and the FIRST spec'd
+    // cast of a session used to compile them synchronously mid-frame (the
     // measured 'mage' program link landing inside the player's own cast
-    // moment (e.g. mid Solemn Prayer cast bar). Seeding glow-lit copies here
-    // puts the clone materials in front of programs.compile while the base
-    // rigs above still carry the un-glowed originals; the group is removed in
-    // the prewarm finally, but the linked programs stay cached for the
-    // session.
+    // moment, e.g. mid Solemn Prayer cast bar). The clones now keep the
+    // source's shader hooks and therefore its program cache key
+    // (material_clone_hooks.ts), which is what closes that hole for mob rigs
+    // and non-default skins too; this seed stays as the boot-side belt for the
+    // player classes, and for any rig material with no hook to preserve. The
+    // group is removed in the prewarm finally, but linked programs stay cached
+    // for the session.
     for (const cls of ALL_CLASSES) {
       if (performance.now() >= deadline) return { group, visualCount: idx };
       const color = CLASSES[cls]?.color ?? 0xffffff;
@@ -4760,6 +4999,19 @@ export class Renderer {
     if (!texture) return;
     this.webgl.initTexture(texture);
     this.gpuReadyTextures.add(texture);
+  }
+
+  /** One spirit-puppet build per idle slot, arbitrated with every other lane
+   *  that reaches WebGL. A rejected unit (renderer shut down mid-build) is a
+   *  dev-channel warning: an unbuilt puppet only means its next cast skips its
+   *  spirit, exactly like a model still in flight. */
+  private queueSpiritPuppetBuild(build: () => void): void {
+    this.spiritBuildLane = this.spiritBuildLane
+      .then(() => idleSlot(IDLE_PREWARM_TIMEOUT_MS))
+      .then(() => this.backgroundGpuWork.run(build, GPU_WORK_PRIORITY.BACKGROUND))
+      .catch((err: unknown) => {
+        console.warn('[spirits] deferred puppet build failed', err);
+      });
   }
 
   private readonly gpuReadyTextures = new WeakSet<THREE.Texture>();
@@ -5211,6 +5463,7 @@ export class Renderer {
     let propMaterialPrewarmGroup: THREE.Group | null = null;
     let foliagePrewarmGroup: THREE.Group | null = null;
     let greatTreePrewarmGroup: THREE.Group | null = null;
+    let weaponVfxPrewarmGroup: THREE.Group | null = null;
     let landmarkPrewarmGroup: THREE.Group | null = null;
     let weatherPrewarmActive = false;
     let surfaceDetailTexturesWarmed = 0;
@@ -5339,6 +5592,7 @@ export class Renderer {
         objectPrewarmGroup,
         propMaterialPrewarmGroup,
         foliagePrewarmGroup,
+        weaponVfxPrewarmGroup,
         landmarkPrewarmGroup,
       ]) {
         if (group) group.visible = false;
@@ -5377,6 +5631,9 @@ export class Renderer {
       if (propMaterialPrewarmGroup) this.scene.remove(propMaterialPrewarmGroup);
       if (foliagePrewarmGroup) this.scene.remove(foliagePrewarmGroup);
       if (greatTreePrewarmGroup) this.scene.remove(greatTreePrewarmGroup);
+      // Removed, never disposed: disposing a material releases its linked
+      // program, which is exactly what this group exists to warm.
+      if (weaponVfxPrewarmGroup) this.scene.remove(weaponVfxPrewarmGroup);
       if (landmarkPrewarmGroup) this.scene.remove(landmarkPrewarmGroup);
       if (weatherPrewarmActive) this.weather.endPrewarm();
       doorPrewarmGroup = null;
@@ -5392,6 +5649,7 @@ export class Renderer {
       propMaterialPrewarmGroup = null;
       foliagePrewarmGroup = null;
       greatTreePrewarmGroup = null;
+      weaponVfxPrewarmGroup = null;
       landmarkPrewarmGroup = null;
       weatherPrewarmActive = false;
     };
@@ -5710,18 +5968,88 @@ export class Renderer {
         detail: () => `bursts=${vfxPrewarmBursts}`,
       },
       {
+        // Weapon-skin rarity VFX: the rigs are worn by OTHER players, so their
+        // programs otherwise link the first time a skinned player walks into
+        // view, mid-gameplay, on top of the rig build itself (the reported
+        // connection freeze). One hidden synthetic rig covers every component
+        // family, and the shader sources carry no authored values, so it
+        // compiles the exact keys the live rigs ask for later. The sky dome is
+        // deliberately not warmed: the world path builds none.
+        id: 'vfx.weapon-skins',
+        category: 'vfx',
+        priority: 61,
+        required: false,
+        // Small explicit units: build the rig, upload its shared sprite
+        // textures, link its programs. Each is one bounded piece of work, so a
+        // deadline drop resumes them in idle time instead of rerunning the
+        // whole entry.
+        resumeUnits: () => [
+          {
+            id: 'weapon-skins:group',
+            run: () => {
+              weaponVfxPrewarmGroup = buildWeaponVfxPrewarmGroup();
+              setRenderCategory(weaponVfxPrewarmGroup, 'prewarm');
+              this.scene.add(weaponVfxPrewarmGroup);
+            },
+          },
+          {
+            id: 'weapon-skins:textures',
+            run: () => {
+              for (const texture of weaponVfxPrewarmTextures()) this.prewarmTexture(texture);
+            },
+          },
+          {
+            id: 'weapon-skins:compile',
+            run: async () => {
+              if (weaponVfxPrewarmGroup) {
+                await this.compilePrewarmColorPrograms(weaponVfxPrewarmGroup, false);
+              }
+            },
+          },
+        ],
+        run: () => {
+          weaponVfxPrewarmGroup = buildWeaponVfxPrewarmGroup();
+          setRenderCategory(weaponVfxPrewarmGroup, 'prewarm');
+          this.scene.add(weaponVfxPrewarmGroup);
+          for (const texture of weaponVfxPrewarmTextures()) this.prewarmTexture(texture);
+        },
+        detail: () => `objects=${weaponVfxPrewarmGroup?.children.length ?? 0}`,
+      },
+      {
         // Spawn one of every pooled ability-VFX primitive (rings, decals,
         // pillar, shell, slash ribbon, overlay sprite). The pools build their
-        // meshes visible=false, so neither the render passes nor
-        // programs.compile ever see their ShaderMaterials, the first spec'd
-        // cast in the open world used to link them synchronously. The spawns
-        // also bind the per-style decal textures, so the texture re-walk below
-        // uploads the whole canvas set now. abilityVfxFx.clear() in the
-        // finally block hides everything again.
+        // meshes visible=false, so no render pass ever draws them: their
+        // textures and geometry stay un-uploaded, and the first spec'd cast in
+        // the open world used to pay for both synchronously. The spawns bind
+        // the per-style decal textures and the six impact sheets, so the
+        // texture re-walk below uploads the whole canvas set now.
+        // abilityVfxFx.clear() in the finally block hides everything again.
+        //
+        // resumeUnits deliberately does NOT replay the spawn: run live it
+        // would pop a white ring/decal/flipbook burst at the player's feet
+        // (the same reason vfx.atlas retains nothing). It carries the
+        // invisible half instead, one impact sheet per unit plus one program
+        // link per distinct pooled material. That is also the MINIMAL variant
+        // constrained devices get in place of this entry
+        // (CONSTRAINED_PREWARM_RESUME): there the whole entry is skipped, so
+        // each 512px sheet is otherwise drawn on the first impact of its
+        // school, i.e. mid-combat.
         id: 'vfx.ability-primitives',
         category: 'vfx',
         priority: 62,
         required: false,
+        resumeUnits: () => [
+          ...abilityVfxTexturePrewarmSteps().map((step) => ({
+            id: `texture:${step.id}`,
+            run: () => {
+              for (const texture of step.build()) this.prewarmTexture(texture);
+            },
+          })),
+          ...collectAbilityVfxCompileTargets(this.scene).map((target) => ({
+            id: `program:${target.id}`,
+            run: () => this.compilePrewarmColorPrograms(target.object, false),
+          })),
+        ],
         run: () => {
           this.abilityVfxFx.prewarmSpawn(p.pos.x, p.pos.y, p.pos.z - 5, p.id);
           this.scene.traverse((child) => {
@@ -5765,6 +6093,7 @@ export class Renderer {
             ['props', propMaterialPrewarmGroup],
             ['foliage', foliagePrewarmGroup],
             ['great-tree', greatTreePrewarmGroup],
+            ['weapon-vfx', weaponVfxPrewarmGroup],
             ['landmark', landmarkPrewarmGroup],
           ];
           return buildPrewarmCompileUnits(
@@ -5863,9 +6192,16 @@ export class Renderer {
       for (const entry of orderedManifest) {
         // Skip everything outside the minimal keep-list (prewarm_policy.ts),
         // recording the skip so the prewarm summary stays honest about what was
-        // deliberately not warmed. The skipped warms happen lazily in-world.
+        // deliberately not warmed. The skipped warms happen lazily in-world,
+        // except for the few entries that opt into the background resume lane
+        // (CONSTRAINED_PREWARM_RESUME): those hand over their explicit small
+        // units, which run after entry instead of never.
         if (!prewarmEntryRuns(entry.id, policy)) {
           const counts = this.prewarmCounts();
+          const skipUnits = prewarmEntryResumesAfterSkip(entry.id, policy)
+            ? (entry.resumeUnits?.() ?? [])
+            : [];
+          if (skipUnits.length > 0) droppedEntries.push({ id: entry.id, units: skipUnits });
           manifestEntries.push({
             id: entry.id,
             category: entry.category,
@@ -5881,7 +6217,10 @@ export class Renderer {
             texturesBefore: counts.textures,
             texturesAfter: counts.textures,
             textureDelta: 0,
-            detail: 'constrained-minimal',
+            detail:
+              skipUnits.length > 0
+                ? `constrained-minimal;resume=${skipUnits.length}`
+                : 'constrained-minimal',
           });
           continue;
         }
@@ -6750,21 +7089,21 @@ export class Renderer {
               : e.templateId === 'rift_infernal_orb' || e.templateId === 'rift_infernal_orb_active'
                 ? 2.2
                 : 2.4;
-      objectMesh = body!;
+      objectMesh = body;
     } else if (e.kind === 'object' && e.templateId === 'mailbox') {
       // Ravenpost pillar: bespoke procedural prop (no sparkle; the unread-mail
       // votive in the group is the per-viewer beacon, toggled in sync()).
       const built = buildMailboxPillar(e.id);
       body = built.group;
       height = built.height;
-      objectMesh = body!;
+      objectMesh = body;
     } else if (e.kind === 'object' && e.templateId === 'noticeboard_eastbrook') {
       // The civic board is itself the readable interaction landmark. Keep the
       // complete GLB on every tier and avoid the generic loot sparkle.
       const built = buildEastbrookNoticeboard();
       body = built.group;
       height = built.height;
-      objectMesh = body!;
+      objectMesh = body;
     } else if (e.kind === 'object' && e.templateId?.startsWith('delve_')) {
       // Delve interactables: skip the object pool (each is unique/stateful) and
       // build a dedicated procedural mesh that matches the crypt aesthetic.
@@ -6799,19 +7138,40 @@ export class Renderer {
         sparkle.position.y = 1.35;
         group.add(sparkle);
       }
+    } else if (e.kind === 'object' && e.templateId?.startsWith('bg_')) {
+      // Battleground flags/runes: stateful (team color, carrier), so skip the
+      // object pool (the delve_ precedent) and build the dedicated body. No
+      // loot sparkle: the flag pennant / rune glow is the beacon.
+      objectPoolKey = null;
+      const built = buildBattlegroundObject(e.templateId, e.color, this.lowGfx);
+      body = built.group;
+      height = built.height;
+      objectMesh = body;
+      // Hoist the per-frame handles onto the VIEW group. battleground_fx.ts
+      // reads `view.group.userData.bg`, and view.group is this method's own
+      // wrapper, the built body goes in as a CHILD of it further down, so the
+      // refs the props builder set are one level too deep to be found. Without
+      // this the fx pass hits `if (!bg) continue` for every rune and flag and
+      // silently animates nothing: no rune spin or bob, no pad light pulse, no
+      // Ward shard orbit, and no flag carrier ring or lean.
+      group.userData.bg = built.group.userData.bg;
     } else if (e.kind === 'object') {
-      objectPoolKey = this.objectPoolKeyFor(e);
-      const pooled = objectPoolKey ? this.takePooledObject(objectPoolKey) : null;
-      if (pooled) {
-        body = pooled.group;
-        height = pooled.height;
-        body.rotation.y = (e.id % 7) * 0.45;
-      } else {
-        const built = buildGroundQuestObject(e.objectItemId ?? '', e.id);
-        body = built.group;
-        height = built.height;
-        objectPoolKey = null;
-      }
+      // Pool MISS keeps its pool key (mirrors the character-visual pool's
+      // "Pool MISS: build a fresh visual but KEEP its pool key" above): see
+      // ground_object_pool.ts for why nulling it here used to corrupt the
+      // forever-cached, geometry-sharing template every ground object clones.
+      const result = takeOrBuildGroundObject(this.objectPool, this.objectPoolKeyFor(e), () =>
+        buildGroundQuestObject(e.objectItemId ?? '', e.id),
+      );
+      // takeOrBuildGroundObject pops through its own internal takePooledObject,
+      // not this class's storePooledObject counterpart, so a HIT here must mirror
+      // storePooledObject's increment by decrementing pooledObjectCount itself;
+      // otherwise the retention cap (GFX.maxPooledObjects) only ever counts up.
+      if (result.reused) this.pooledObjectCount = Math.max(0, this.pooledObjectCount - 1);
+      objectPoolKey = result.poolKey;
+      body = result.object.group;
+      height = result.object.height;
+      if (result.reused) body.rotation.y = (e.id % 7) * 0.45;
       objectMesh = body;
       if (!this.sparkleMat) {
         this.sparkleMat = new THREE.SpriteMaterial({
@@ -6977,6 +7337,9 @@ export class Renderer {
       lastOverheadEmoteKey: null,
       lastX: e.pos.x,
       lastZ: e.pos.z,
+      lastY: e.pos.y,
+      swimPitch: 0,
+      wasWading: false,
       skin: e.skin,
       mainhandItemId: e.mainhandItemId,
       offhandItemId: e.offhandItemId,
@@ -6985,6 +7348,9 @@ export class Renderer {
       // Born false so the per-frame diff below sheathes an already-stowed entity
       // (a peer entering interest) on its first sync.
       weaponStowed: false,
+      // Born with the CURRENT bit: unlike the stow pose there is no transition
+      // to replay, createCharacterVisual composed with it just now.
+      helmHidden: e.helmHidden,
       liveScale: e.scale,
       loco: newLocoTrack(),
       locoState: newLocoState(),
@@ -6996,6 +7362,9 @@ export class Renderer {
       waterContactAccum: 0,
       wasAirborne: false,
       wasSwimming: false,
+      wasSubmerged: false,
+      wasFalling: false,
+      swimKickPhase: 0,
       airborneHeurFrames: 0,
       lastMountKey: e.mountKey,
       wasMountCasting: e.mountCastRemaining > 0,
@@ -7222,6 +7591,59 @@ export class Renderer {
     });
   }
 
+  // Weapon-skin cosmetics waiting to be applied to a live view, at most one
+  // application per frame. All the queue decisions (coalescing, cancellation,
+  // the stale-guard) live in the pure core; this class only does the Three work
+  // the drain hands back.
+  private readonly weaponSkinApplies = new WeaponSkinApplyQueue();
+  private readonly weaponSkinApplyScratch: WeaponSkinApplyDecision[] = [];
+
+  // Bound once, never per frame: the drain's two callbacks would otherwise mint
+  // a closure pair on every drained frame.
+  private readonly weaponSkinLookup = (viewId: number): string | undefined => {
+    // A view that is gone, pooled, or has no character rig has nothing to apply
+    // to; everything else is the live entity's own answer.
+    if (!this.views.get(viewId)?.visual) return undefined;
+    return resolveQueuedSkinLookup(this.sim.entities.get(viewId));
+  };
+
+  // Nearest first: in a crowd of arrivals the wearer beside the player must not
+  // wait out thirty distant rigs at one application per frame. Squared XZ
+  // distance to the player, the same measure the view create/destroy bands use.
+  private readonly weaponSkinRank = (viewId: number): number | undefined => {
+    const entity = this.sim.entities.get(viewId);
+    return entity ? distSqXZ(entity, this.sim.player) : undefined;
+  };
+
+  /** Apply (or clear) a weapon-skin cosmetic on one view and latch it. The
+   *  latch is written HERE, never at enqueue time, so a queued application
+   *  that never ran is retried by the next frame's diff. */
+  private applyWeaponSkin(v: EntityView, skinId: string | null): void {
+    if (!v.visual) return;
+    v.weaponSkinId = skinId;
+    const changed = v.visual.setWeaponSkin(skinId);
+    if (changed) for (const node of changed) this.gateSwapOnCompile(node);
+    this.reconcileViewLights(v);
+  }
+
+  /** Spend this frame's weapon-skin application budget, nearest wearer first.
+   *  Entries whose view is gone, or whose entity has moved on to another skin,
+   *  are dropped without spending it (the diff re-enqueues if the view still
+   *  needs one). */
+  private drainWeaponSkinApplies(): void {
+    if (this.weaponSkinApplies.size === 0) return;
+    const due = this.weaponSkinApplies.take(
+      WEAPON_SKIN_APPLIES_PER_FRAME,
+      this.weaponSkinLookup,
+      this.weaponSkinApplyScratch,
+      this.weaponSkinRank,
+    );
+    for (const entry of due) {
+      const view = this.views.get(entry.viewId);
+      if (view) this.applyWeaponSkin(view, entry.skinId);
+    }
+  }
+
   private reconcileViewLights(v: EntityView): void {
     const reconciled = reconcileViewPointLights(v.group, v.viewLights, this.viewLights);
     if (!reconciled.changed) return;
@@ -7295,6 +7717,12 @@ export class Renderer {
     if (target.kind !== 'player' || target.dead || target.id === this.sim.playerId) return false;
     if (this.sim.duelInfo?.state === 'active' && this.sim.duelInfo.otherPid === target.id)
       return true;
+    // Thornhollow Fields: the opposing TEAM is hostile for the whole live match.
+    const bg = this.sim.bgInfo?.match;
+    if (bg?.state === 'active') {
+      const row = bg.players.find((p) => p.pid === target.id);
+      if (row && row.team !== bg.myTeam) return true;
+    }
     const match = this.sim.arenaInfo?.match;
     return (
       match?.state === 'active' &&
@@ -7323,6 +7751,13 @@ export class Renderer {
   // Protect Yumi maze interiors, one per match slot, built lazily like the
   // arena copies; their update() anchors the team beacons each frame.
   private yumiMazeViews = new Map<number, YumiMazeView>();
+  // Thornhollow Fields battleground fields, one per match slot, built lazily like the
+  // yumi maze copies; the geometry is static, and the only per-frame work is the
+  // occluder fade the placements own (battleground_placements.ts).
+  private bgViews = new Map<number, BattlegroundView>();
+  // Reused ward-state carrier: setWardState only READS these fields, so the
+  // per-frame push refills this object rather than minting a literal.
+  private bgWardState = { countdown: false, ghost: false, myTeam: null as number | null };
   // Blue/red team arrows above every yumi fighter (yumi_team_markers.ts).
   private readonly yumiTeamMarkers = new YumiTeamMarkers();
   // Delve module interiors build asynchronously; track in-flight keys so a
@@ -7341,6 +7776,7 @@ export class Renderer {
     | 'nythraxis'
     | 'delve'
     | 'yumiMaze'
+    | 'battleground'
     | 'underwater'
     | 'rift'
     | 'practice'
@@ -7438,6 +7874,8 @@ export class Renderer {
     // the Galecrest: scrubbed salt air, dawn-lit haze off the sea
     gale: { color: 0xccc9d8, near: 170, far: 645 },
   };
+
+  private static readonly BATTLEGROUND_FOG = { color: 0xaecbe0, near: 70, far: 210 };
   // Low tier trades view distance for draw count (its own perf knob, never a
   // gameplay one: entities draw within their own much shorter ranges on every
   // tier, so fog distance sheds only cosmetic scenery). Takes the same
@@ -7501,6 +7939,23 @@ export class Renderer {
     cave: { hemiSky: 0x4d564c, hemiGround: 0x0e120e, sun: 0x6e7a66, sunScale: 0.8, envScale: 0.8 },
   };
 
+  // God-ray shaft strength per biome (default 1). The shafts sell a bright
+  // sun hanging in clear or golden air; under the Nightbloom's starfield
+  // twilight or the Wraithwood's grey murk the same additive streaks read as
+  // artifacts (a playtested report over the Nightbloom's lake), and the
+  // overcast/rain realms keep only a hint. Eased in updateAmbience so a
+  // border crossing fades the shafts instead of popping them.
+  private static BIOME_GOD_RAYS: Partial<Record<BiomeId, number>> = {
+    night: 0,
+    haunt: 0,
+    cave: 0,
+    dusk: 0.35,
+    frost: 0.45,
+    ember: 0.55,
+    volcano: 0.3,
+    marsh: 0.3,
+  };
+
   private outdoorFogPreset(): { color: number; near: number; far: number } {
     if (this.lowGfx) return Renderer.LOW_FOG;
     return Renderer.BIOME_FOG[zoneBiomeAt(this.sim.player.pos.x, this.sim.player.pos.z)];
@@ -7522,6 +7977,24 @@ export class Renderer {
       this.farVista.enabled &&
       this.farTerrainView.builtTileCount() >= this.farTerrainView.plannedTileCount()
     );
+  }
+
+  /**
+   * The entry-curtain gate over the boot far-grid build: resolves true once
+   * the vista can stand in for the fog, or false after `maxWaitMs` so a
+   * pathological device never holds the player at the loading screen (the
+   * classic eased flip then covers the remainder, exactly as before). On
+   * success the next outdoor environment update settles scene fog at the
+   * horizon haze band, still behind the curtain, so the first visible frame
+   * carries the finished horizon rather than easing the fog out on screen.
+   * A no-op true on profiles with the vista off. Thin consumer: both gate
+   * arms live in farVistaGate (far_terrain.ts), pinned by its tests.
+   */
+  async farVistaReady(maxWaitMs: number = FAR_VISTA_ENTRY_MAX_WAIT_MS): Promise<boolean> {
+    if (!this.farVista.enabled) return true;
+    const ready = await farVistaGate(this.farVistaInitialBuild, maxWaitMs);
+    if (ready && this.vistaLive()) this.vistaEntrySettlePending = true;
+    return ready;
   }
 
   /** The classic cull distance the detail subsystems key off: scene fog
@@ -7616,6 +8089,12 @@ export class Renderer {
   private updateAmbience(px: number, camY: number, dt: number): void {
     const inside = px > DUNGEON_X_THRESHOLD;
     const pz = this.sim.player.pos.z;
+    // The entry-curtain settle is one-shot and belongs to THIS update only:
+    // consumed by the outdoor arm below when the entry really is outdoors,
+    // discarded otherwise (an interior login must keep its normal eased
+    // transition when the player later walks outside).
+    const settleVistaEntry = this.vistaEntrySettlePending;
+    this.vistaEntrySettlePending = false;
     // Private Vale Cup practice instance: the pitch sits far out in an instance
     // band (which would otherwise read as a delve), so give it its own futuristic
     // skybox + matching fog instead of the delve murk. Detected by the match's
@@ -7631,10 +8110,16 @@ export class Renderer {
       this.valeCupSky.mesh.visible = false;
     }
     const biome = zoneBiomeAt(this.sim.player.pos.x, pz);
+    // Per-biome god-ray strength, eased over about half a second so a border
+    // crossing fades the shafts with the rest of the ambience.
+    const shaftTarget = Renderer.BIOME_GOD_RAYS[biome] ?? 1;
+    this.godRayZoneScale +=
+      (shaftTarget - this.godRayZoneScale) * (1 - Math.exp(-2 * Math.max(0, dt)));
     const phaseOverride = dayNightPhaseOverride();
     if (this.lowGfx && DAY_ONLY && phaseOverride === null) {
       if (this.fixedLowDayBiome !== biome) {
         this.dnGrade = NEUTRAL_DAY_GRADE;
+        this.dnGlobalNight = 0;
         this.sunDir.copy(SUN_DIR);
         this.moonDir.set(0, -1, 0);
         this.sunUp = aboveHorizon(SUN_DIR.y) * REALM_DAYNIGHT_AMPLITUDE[biome];
@@ -7648,12 +8133,10 @@ export class Renderer {
       // dev override still drives the real grade even while DAY_ONLY ships.
       const phase = currentDayNightPhase();
       const gday = globalDayness(phase);
-      this.dnGrade =
-        DAY_ONLY && phaseOverride === null
-          ? NEUTRAL_DAY_GRADE
-          : dayNightGrade(effectiveDayness(gday, biome));
       const amp = REALM_DAYNIGHT_AMPLITUDE[biome];
       if (DAY_ONLY && phaseOverride === null) {
+        this.dnGrade = NEUTRAL_DAY_GRADE;
+        this.dnGlobalNight = 0;
         this.sunDir.copy(SUN_DIR);
         this.moonDir.set(0, -1, 0);
         this.sunUp = aboveHorizon(SUN_DIR.y) * amp;
@@ -7667,8 +8150,28 @@ export class Renderer {
         this.sunUp = aboveHorizon(sd[1]) * amp;
         this.moonUp = aboveHorizon(md[1]) * Math.max(amp, 0.6);
         this.starAmt = nightStarAmount(gday);
+        // the whole grade warms as the sun crosses the horizon, so the fog,
+        // sky dome, and water all take the sunrise/sunset orange rather than
+        // just the key light
+        this.dnGrade = warmDuskGrade(
+          dayNightGrade(effectiveDayness(gday, biome), biome),
+          duskWarmAmount(sd[1]),
+        );
+        // The night-visibility layers read the world clock, not the realm's
+        // compressed grade, so lamps light at the same instant everywhere. The
+        // Lambert tier never applies the grade at all (see the outdoor branch
+        // below), so it reports full day and its lamps stay dark.
+        this.dnGlobalNight = nightLightAmount(1 - gday, !this.lowGfx);
       }
     }
+    // The distant-zone haze rides the settled grade and the live camera: a
+    // neighbouring realm's air darkens and cools through the cycle exactly
+    // like the air the player stands in, because both take the identical
+    // dnGrade.fog multiply. Unconditional and once per frame (the world
+    // surfaces that sample the field are drawn from both sync paths); a no-op
+    // when no field was built.
+    setBiomeHazeGrade(this.dnGrade.fog);
+    setBiomeHazeCamera(this.camera.position.x, this.camera.position.z);
     if (isDelvePos(px) && !inPractice) {
       this.ensureDelveInteriorsNear(px, pz);
     } else if (inside && isYumiMazePos(px)) {
@@ -7686,6 +8189,18 @@ export class Renderer {
           setRenderCategory(view.group, 'dungeon');
           this.scene.add(view.group);
           this.yumiMazeViews.set(i, view);
+        }
+      }
+    } else if (inside && isBgPos(px)) {
+      // build the Thornhollow Fields copy the player was matched into (the yumi
+      // view-map pattern; the field is static, so no per-frame update hook)
+      for (let i = 0; i < BG_SLOT_COUNT; i++) {
+        if (this.bgViews.has(i)) continue;
+        const o = battlegroundOrigin(i);
+        if (Math.abs(px - o.x) < 220 && Math.abs(pz - o.z) < 200) {
+          const view = buildBattleground(o, this.sim.cfg.seed, { lowGfx: this.lowGfx });
+          this.scene.add(view.group);
+          this.bgViews.set(i, view);
         }
       }
     } else if (inside && isArenaPos(px)) {
@@ -7764,8 +8279,11 @@ export class Renderer {
     // crypt's near-black, so its flooded halls feel underwater, not just dark
     const inDelve = inside && isDelvePos(px);
     const inYumiMaze = inside && isYumiMazePos(px);
+    const inBattleground = inside && isBgPos(px);
     const interior =
-      inside && !inDelve && !inYumiMaze && !isArenaPos(px) ? dungeonAt(px)?.interior : null;
+      inside && !inDelve && !inYumiMaze && !inBattleground && !isArenaPos(px)
+        ? dungeonAt(px)?.interior
+        : null;
     const inTemple = interior === 'temple';
     const inNythraxis = interior === 'nythraxis';
     // Wildheart is an OPEN-AIR jungle caldera, not a closed room: it keeps the
@@ -7778,19 +8296,27 @@ export class Renderer {
         ? 'delve'
         : inYumiMaze
           ? 'yumiMaze'
-          : inTemple
-            ? 'temple'
-            : inNythraxis
-              ? 'nythraxis'
-              : inWildheartField
-                ? 'wildheartField'
-                : inLastKeep
-                  ? 'lastkeep'
-                  : inside
-                    ? 'dungeon'
-                    : camY < waterLevelAt(px, pz) - 0.05
-                      ? 'underwater'
-                      : 'outdoor';
+          : inBattleground
+            ? 'battleground'
+            : inTemple
+              ? 'temple'
+              : inNythraxis
+                ? 'nythraxis'
+                : inWildheartField
+                  ? 'wildheartField'
+                  : inLastKeep
+                    ? 'lastkeep'
+                    : inside
+                      ? 'dungeon'
+                      : camY <
+                          waterLevelAt(
+                            this.camera.position.x,
+                            this.camera.position.z,
+                            this.sim.cfg.seed,
+                          ) -
+                            0.05
+                        ? 'underwater'
+                        : 'outdoor';
     const fog = this.scene.fog as THREE.Fog;
     // Procedural rift: dynamic fog from the generated floor style, re-applied when
     // the floor changes (descent keeps fogState='rift' but swaps the palette).
@@ -7865,6 +8391,19 @@ export class Renderer {
         fog.color.setHex(0x161d31);
         fog.near = 30;
         fog.far = 170;
+      } else if (desired === 'battleground') {
+        // Thornhollow Fields is OPEN-AIR at immersive scale (100x280): true
+        // view-distance fog, the open world's own rule. The fight around you
+        // (~a chamber) reads clearly; the far keep's detail still dissolves
+        // before the 236yd flag-to-flag line, so the far chambers stay places
+        // you travel to, not read from spawn. Pushed back from the original
+        // 55/130 after the playtest: the tighter wall of haze swallowed the
+        // sky and flattened the light; at 70/210 the dome and ramparts
+        // breathe while the tactical veil holds. Symmetric for both teams:
+        // distance, never information.
+        fog.color.setHex(0xaecbe0);
+        fog.near = 70;
+        fog.far = 210;
       } else if (desired === 'practice') {
         // The private practice pitch under its futuristic sky: tint the fog to
         // the sky variant and push it well back so the pitch reads clear and lit
@@ -7914,7 +8453,7 @@ export class Renderer {
               ? LASTKEEP_HEMI_INTENSITY
               : underground
                 ? DUNGEON_HEMI_INTENSITY
-                : hemiOutdoorIntensity() * this.dnGrade.lightScale;
+                : hemiOutdoorIntensity() * this.dnGrade.ambientScale;
         this.scene.environmentIntensity = mazeNight
           ? YUMI_MAZE_ENV_INTENSITY
           : wildheartSun
@@ -7923,7 +8462,7 @@ export class Renderer {
               ? LASTKEEP_ENV_INTENSITY
               : underground
                 ? DUNGEON_ENV_INTENSITY
-                : this.envOutdoorIntensity * this.dnGrade.lightScale;
+                : this.envOutdoorIntensity * this.dnGrade.ambientScale;
         sharedUniforms.uRimBoost.value = mazeNight
           ? YUMI_MAZE_RIM_BOOST
           : wildheartSun
@@ -7953,7 +8492,6 @@ export class Renderer {
     if (desired === 'outdoor') {
       const g = this.dnGrade;
       const preset = this.outdoorFogPreset();
-      const k = transitionAlpha(dt, ZONE_ENVIRONMENT_RESPONSE);
       // Vista tiers run WITHOUT outdoor fog: the detail horizon is a uniform
       // envelope in every realm (the presets' murk walls are retired), and
       // scene fog parks past the camera far plane where it occludes nothing.
@@ -7972,14 +8510,37 @@ export class Renderer {
       const ground = this.terrainView.groundResidency();
       const detailSource = vista ? this.detailFogFar : fog.far;
       const atmosphericFar = dampedValue(detailSource, requestedFar, dt, ZONE_ENVIRONMENT_RESPONSE);
+      // Ask the clamp only about ground the camera can see. Radially, the
+      // binding chunk orbits with the third-person boom, so standing still and
+      // turning on the spot dragged the detail horizon between 170 and 700
+      // yards and deleted mid-field scenery and shadows with it.
+      this.camera.getWorldDirection(this.residencyForward);
+      this.residencyCone.forwardX = this.residencyForward.x;
+      this.residencyCone.forwardZ = this.residencyForward.z;
+      this.residencyCone.halfAngle = groundViewConeHalfAngle(
+        THREE.MathUtils.degToRad(this.camera.fov),
+        this.camera.aspect,
+      );
       const residencyFar = fogFarForBuiltGround(
         ground.grid,
         ground.isPending,
         this.camera.position.x,
         this.camera.position.z,
         atmosphericFar,
+        this.residencyCone,
       );
       if (vista) {
+        // Entry settle (one-shot, armed by farVistaReady behind the opaque
+        // curtain): start scene fog AT the horizon haze band instead of
+        // easing it out over the first seconds on screen. Fog only: the
+        // detail horizon stays residency-governed below and expands as
+        // chunks land, exactly as streaming always behaved; the far mesh
+        // stands beneath it, so no fog wall and no hole is ever visible.
+        if (settleVistaEntry) {
+          const entryHaze = horizonHazePlan(this.farVista.envelopeFar);
+          fog.far = entryHaze.far;
+          fog.near = entryHaze.near;
+        }
         this.detailFogFar = easedFogFar(this.detailFogFar, requestedFar, residencyFar, dt);
         // Fog itself eases out to the horizon haze band: zero effect across
         // every gameplay distance, a gentle realm-tinted aerial blend where
@@ -7992,6 +8553,14 @@ export class Renderer {
         fog.far = easedFogFar(fog.far, requestedFar, residencyFar, dt);
         fog.near = easedFogNear(fog.near, preset.near, fog.far, dt);
       }
+    }
+    // Every open-air state follows the live grade. Thornhollow keeps its
+    // authored fog range while sharing the overworld's color and light grade.
+    if (usesLiveDayNightLighting(desired)) {
+      const g = this.dnGrade;
+      const preset =
+        desired === 'battleground' ? Renderer.BATTLEGROUND_FOG : this.outdoorFogPreset();
+      const k = transitionAlpha(dt, ZONE_ENVIRONMENT_RESPONSE);
       if (this.lowGfx) return;
       // fog color: the biome hue multiplied by the day/night color (a dark
       // dusk-blue by night)
@@ -8007,21 +8576,40 @@ export class Renderer {
       const light = Renderer.BIOME_LIGHT[biome];
       // the sun light warms toward gold, gently by day and strongly as it nears
       // the horizon (a golden hour), then cools toward moonlight deep at night.
-      // The warm blend is gated by aboveHorizon so it never tints the moonlight.
+      // sunsetWarmGate holds the warm through the horizon crossing and drops it
+      // before the key light hands over to the moon, so moonlight stays cool.
       const sunElev = this.sunDir.y;
-      let hi = (sunElev - 0.08) / 0.5;
+      let hi = (sunElev - 0.12) / 0.46;
       hi = hi < 0 ? 0 : hi > 1 ? 1 : hi;
       const lowness = 1 - hi * hi * (3 - 2 * hi);
-      // 0.42 base: with the key pinned at 31° the warm never ramps through
-      // the old near-horizon band, so the standing gold has to come from the
-      // base term. This is the golden-hour read at the permanent day angle
-      const warmAmt = aboveHorizon(sunElev) * (0.52 + lowness * 0.4);
+      // The base term is the standing day gold (the look tuned at the fixed
+      // 31 degree anchor, which the live noon sun closely matches); the
+      // lowness ramp runs the warm all the way to 1 at the horizon so sunrise
+      // and sunset go genuinely orange, and the gate takes the whole warm off
+      // below it so the moonlight never picks up a sunset tint.
+      // The base sits at 0.58 rather than the first cut's 0.52: standing
+      // daylight read clinical, and this is a couple hundred kelvin of golden
+      // bias (a vale noon key lands near rgb 255,182,144 instead of
+      // 255,189,152), not an orange midday. The lowness ramp reaches full at
+      // y 0.12 rather than 0.08 so the key light is already at its sunset
+      // orange while the gate still passes it at full strength, which is what
+      // makes the golden hour read as a band rather than an instant.
+      const warmAmt = sunsetWarmGate(sunElev) * (0.58 + lowness * 0.42);
+      // The realm's own night hue, as a luminance-neutral multiplier. Applied
+      // to the key light and both hemisphere halves AFTER they cool toward the
+      // moon, so a realm keeps tinting the world it lights after dark: the
+      // Drakelands' grass is green and reads red under its ember light, and
+      // that has to survive the night or the realm stops being itself.
+      const realmTint = realmLightTint(g.fog, g.nightAmt * REALM_MOON_TINT);
       this.dnColorScratch.setHex(light.sun);
       this.dnColorScratch.lerp(this.dnMoonScratch.setHex(WARM_SUN_COLOR), warmAmt);
       this.dnColorScratch.lerp(
         this.dnMoonScratch.setHex(MOON_SUN_COLOR),
         g.nightAmt * NIGHT_SUN_COOL,
       );
+      this.dnColorScratch.r *= realmTint[0];
+      this.dnColorScratch.g *= realmTint[1];
+      this.dnColorScratch.b *= realmTint[2];
       this.sun.color.lerp(this.dnColorScratch, k);
       this.dnColorScratch
         .setHex(light.hemiSky)
@@ -8030,6 +8618,9 @@ export class Renderer {
           DAY_HEMI_SKY_WARMTH * (1 - g.nightAmt),
         )
         .lerp(this.dnMoonScratch.setHex(MOON_HEMI_SKY_COLOR), g.nightAmt * NIGHT_HEMI_COOL);
+      this.dnColorScratch.r *= realmTint[0];
+      this.dnColorScratch.g *= realmTint[1];
+      this.dnColorScratch.b *= realmTint[2];
       this.hemi.color.lerp(this.dnColorScratch, k);
       // the ground bounce cools with the sky side so night shading does not keep
       // a warm daytime tint (its brightness still rides the hemi intensity above)
@@ -8040,12 +8631,48 @@ export class Renderer {
           DAY_HEMI_GROUND_WARMTH * (1 - g.nightAmt),
         )
         .lerp(this.dnMoonScratch.setHex(MOON_HEMI_GROUND_COLOR), g.nightAmt * NIGHT_HEMI_COOL);
+      this.dnColorScratch.r *= realmTint[0];
+      this.dnColorScratch.g *= realmTint[1];
+      this.dnColorScratch.b *= realmTint[2];
       this.hemi.groundColor.lerp(this.dnColorScratch, k);
       this.sun.intensity +=
         (SUN_INTENSITY * g.lightScale * (light.sunScale ?? 1) - this.sun.intensity) * k;
+      // The ambient half rides its own higher night floor, so terrain shape and
+      // body silhouettes survive deep night while the moon key light stays dim.
       this.hemi.intensity +=
-        (hemiOutdoorIntensity() * g.lightScale * (light.hemiScale ?? 1) - this.hemi.intensity) * k;
+        (hemiOutdoorIntensity() * g.ambientScale * (light.hemiScale ?? 1) - this.hemi.intensity) *
+        k;
+      // The character rim (the cheapest silhouette separator the renderer owns:
+      // one shared uniform, no extra draw, every rig at once) lifts after dark
+      // for the same reason the ambient floor does. Outdoors this is the only
+      // writer; the fogState transition above sets it to 1 on the way out of an
+      // interior and this immediately re-grades it.
+      sharedUniforms.uRimBoost.value = nightRimBoost(this.dnGlobalNight);
     }
+  }
+
+  // The camera under a waterline: a blue wash, shortened fog, and a rising
+  // bubble stream. Keyed off the CAMERA, not the player, so a third-person boom
+  // that dips below the surface reads right, and a swimmer at the surface with
+  // the camera under it still sees water rather than air.
+  private updateUnderwater(dt: number): void {
+    const cam = this.camera.position;
+    const level = waterLevelAt(cam.x, cam.z, this.sim.cfg.seed);
+    // Fade across the first half-yard under the line, so breaking the surface
+    // is a wash lifting rather than a switch flipping.
+    const depth = Number.isFinite(level) ? level - cam.y : -1;
+    const target = Math.min(1, Math.max(0, depth / UNDERWATER_FADE_DEPTH));
+    this.underwaterBlend += (target - this.underwaterBlend) * (1 - Math.exp(-dt * 7));
+    this.underwaterView.update(this.camera, this.underwaterBlend, dt);
+    if (this.underwaterBlend <= 0.002) return;
+    // Ride ON TOP of whatever the biome fog easing just wrote. The easing pulls
+    // back toward the zone preset every frame and this pulls toward the water,
+    // so surfacing restores the biome's own fog with no state to unwind.
+    const fog = this.scene.fog as THREE.Fog;
+    const b = this.underwaterBlend;
+    fog.color.lerp(this.fogScratch.setHex(UNDERWATER_FOG_COLOR), b);
+    fog.near += (UNDERWATER_FOG_NEAR - fog.near) * b;
+    fog.far += (UNDERWATER_FOG_FAR - fog.far) * b;
   }
 
   // Hand the prefiltered environment map to the dominant eased sky biome.
@@ -8053,7 +8680,9 @@ export class Renderer {
   // low contribution, authorizes the texture/rotation swap, then restores the
   // new biome on the same long response as fog and light tint.
   private updateEnvBiome(dt: number): void {
-    if (this.lowGfx || this.envRTs.size < 2 || this.fogState !== 'outdoor') return;
+    if (this.lowGfx || this.envRTs.size < 2 || !usesLiveDayNightLighting(this.fogState)) {
+      return;
+    }
     const blend = this.skyView.currentBiomeBlend();
     const dominant = blend.t < 0.5 ? blend.from : blend.to;
     // the biome's light-level scale applies to the IBL too, or a dimmed realm
@@ -8064,8 +8693,19 @@ export class Renderer {
       dominant in Renderer.BIOME_LIGHT
         ? (Renderer.BIOME_LIGHT[dominant as BiomeId].envScale ?? 1)
         : 1;
+    // ...and at night the realm's own sky energy is normalized toward the Vale's.
+    // The IBL is the realm's DAYTIME HDRI and those differ twenty-two fold in
+    // measured irradiance, so an identical ambient scale left Willowfen and
+    // Palmreach reading as an overcast afternoon while Eastbrook read as night.
+    // Level only: the HDRI keeps its colour, so a realm's night stays its own.
+    const nightEnvScale =
+      dominant in Renderer.BIOME_LIGHT
+        ? nightIblScale(dominant as BiomeId, this.dnGrade.nightAmt)
+        : 1;
     const target = this.envRTs.has(dominant) ? dominant : this.envTransition.current;
-    const settledIntensity = this.envOutdoorIntensity * this.dnGrade.lightScale * envScale;
+    // The IBL is ambient, so it follows the grade's ambient floor, not the sun's.
+    const settledIntensity =
+      this.envOutdoorIntensity * this.dnGrade.ambientScale * envScale * nightEnvScale;
     // Interior presets write the scene intensity directly. Re-seed from that
     // live value on the first outdoor frame so returning outside never jumps
     // back to a stale transition scalar.
@@ -8099,17 +8739,76 @@ export class Renderer {
         pp.y + this.lightDir.y * SUN_TRAVEL_DISTANCE,
         pp.z + this.lightDir.z * SUN_TRAVEL_DISTANCE,
       );
+      // the unlit water shader follows the same key light and grade: glints
+      // track the sun by day and the moon by night, and the surface dims with
+      // the world (its baked palette would otherwise stay day-bright at night)
+      setWaterSunDirection(this.lightDir);
+      setWaterDayNight(this.dnGrade.fog);
+      // the far vista's deep-night ambient floor and night albedo dim ride
+      // the same grade
+      setFarTerrainNightGrade(this.dnGrade.nightAmt);
+      // The foliage shadow clones cull against this ortho box rather than
+      // against camera distance: geometry outside it cannot write a shadow
+      // texel (foliage_shadow_core.ts). Push it here, where the light's own
+      // direction and target are decided, so the two can never disagree.
+      if (this.sun.castShadow) {
+        setFoliageShadowVolume(this.lightDir, pp, this.sun.shadow.camera, SUN_TRAVEL_DISTANCE);
+      } else {
+        clearFoliageShadowVolume();
+      }
     }
     this.sun.target.position.set(pp.x, pp.y, pp.z);
   }
 
   // Aim the sun and moon disc sprites along their directions and fade them by how
   // far each body sits above the horizon (out when below, and only outdoors).
+  /** Is the camera under real sky? The overworld, Wildheart's open field, and
+   *  the Thornhollow Fields hollow all render the dome; every enclosed state
+   *  (dungeon, temple, rift, underwater) does not. */
+  /** Drive the field wards off the live match view: the form-up gate while the
+   *  countdown holds, and the grave ward while the player waits as a spirit.
+   *  Only visibility flags, so this is cheap enough for the per-frame block. */
+  private updateBgWards(): void {
+    if (this.bgViews.size === 0) return;
+    const match = this.sim.bgInfo?.match ?? null;
+    // Scratch state, refilled in place: setWardState only reads the fields, so
+    // a fresh literal every frame would be pure garbage on the render path.
+    const state = this.bgWardState;
+    state.countdown = match?.state === 'countdown';
+    state.myTeam = match ? match.myTeam : null;
+    // The roster scan only matters while the match is live, so it is skipped as
+    // a whole outside that window rather than run and then discarded, and the
+    // plain loop over the at-most-ten rows allocates no per-frame closure.
+    state.ghost = false;
+    if (match?.state === 'active') {
+      const me = this.sim.playerId;
+      for (const row of match.players) {
+        if (row.pid !== me) continue;
+        state.ghost = row.dead;
+        break;
+      }
+    }
+    for (const view of this.bgViews.values()) view.setWardState(state);
+  }
+
+  private isOpenAirFog(): boolean {
+    return (
+      this.fogState === 'outdoor' ||
+      this.fogState === 'wildheartField' ||
+      this.fogState === 'battleground'
+    );
+  }
+
   private updateCelestialSprites(): void {
     // The basin keeps directional daylight and the sky dome, but the camera-
     // riding sun and moon sprites can clip against its high rim as oversized
     // wedges. Reserve screen-space celestial overlays for the overworld.
     const outdoor = this.fogState === 'outdoor';
+    // keep the moon's shape on the lunar clock (no-op between phase buckets)
+    // and run the sun's disc to sunset orange on the same horizon curve the
+    // sky glow uses
+    this.celestialSprites?.setMoonPhase(currentLunarPhase());
+    this.celestialSprites?.setSunWarmth(duskWarmAmount(this.sunDir.y));
     for (const sp of this.sunSprites) {
       sp.position.copy(this.camera.position).addScaledVector(this.sunDir, 760);
       sp.visible = outdoor && this.sunUp > 0.02;
@@ -8126,6 +8825,9 @@ export class Renderer {
   private removeView(id: number, terminal = false): void {
     const v = this.views.get(id);
     if (!v) return;
+    // A pending weapon-skin application must never land on a dropped (or
+    // pooled and reused) view.
+    this.weaponSkinApplies.cancel(id);
     this.scene.remove(v.group);
     this.lightOwnerGroups.delete(v.group);
     if (v.viewLights.length > 0) {
@@ -8284,6 +8986,12 @@ export class Renderer {
     }
     this.time += dt;
     sharedUniforms.uTime.value = this.time;
+    // the paint-free carpet ring the terrain splat reads (see terrain.ts)
+    sharedUniforms.uCarpetRing.value.set(
+      this.sim.player.pos.x,
+      this.sim.player.pos.z,
+      GFX.bladeCarpetRadius,
+    );
     for (const [id, remaining] of this.waterJetVisualChannels) {
       const next = remaining - dt;
       if (next <= 0) this.waterJetVisualChannels.delete(id);
@@ -8722,6 +9430,19 @@ export class Renderer {
         iceBlockActivated = v.iceBlockVisual?.activatedThisFrame === true;
       }
 
+      // live helm toggle (the paperdoll eye): the kit's head piece is part of
+      // the composed geometry, not a texture, so flipping it means recomposing
+      // the body. Nulling the remembered key makes updateBaseVisual's next-key
+      // diff read as a base-visual swap, reusing its whole replace path
+      // (click-target handoff, compile gating). Composed entities only: a
+      // fixed class rig has no kit helm to take off.
+      if (e.helmHidden !== v.helmHidden) {
+        v.helmHidden = e.helmHidden;
+        // Mech wearers keep the mech body (index.ts skips their look), so a
+        // helm toggle must not force a pointless dispose/rebuild of it. Asked
+        // through isMechWearer, the one definition of the rule.
+        if (!isMechWearer(e) && modularLookFor(e)) v.visualKey = null;
+      }
       this.updateBaseVisual(e, v);
       if (!v.visual) continue;
       if (iceBlockActivated) this.activeVisual(v)?.playEmote('wave', 1);
@@ -8761,22 +9482,26 @@ export class Renderer {
       }
 
       // live weapon-skin swap: a Season 1 Armory cosmetic applied/detached (self
-      // or a peer, via the identity wire); replaces the held model + rarity VFX
+      // or a peer, via the identity wire); replaces the held model + rarity VFX.
+      // APPLYING one is the expensive direction (model swap, derived emissive
+      // materials, the whole VFX rig), so it goes through the per-frame budgeted
+      // queue instead of running here: a crowd of skinned players arriving at
+      // once used to build every rig inside this one frame. Clearing a skin
+      // builds no rig, so it stays synchronous and instant, and cancels any
+      // queued apply so a stale entry cannot put the skin back on.
+      // The latch is written by the application itself (see applyWeaponSkin),
+      // so this diff keeps re-enqueueing (idempotent: one entry per view) until
+      // the queued work actually lands.
       if (e.weaponSkinId !== v.weaponSkinId) {
-        v.weaponSkinId = e.weaponSkinId;
-        const changed = v.visual.setWeaponSkin(e.weaponSkinId);
-        if (changed) for (const node of changed) this.gateSwapOnCompile(node);
-        this.reconcileViewLights(v);
+        if (e.weaponSkinId === null) {
+          this.weaponSkinApplies.cancel(id);
+          this.applyWeaponSkin(v, null);
+        } else {
+          this.weaponSkinApplies.enqueue(id, e.weaponSkinId);
+        }
       }
       const weaponAura = characterWeaponAuraInto(e, this.weaponAuraScratch);
       v.visual.setWeaponAura(weaponAura ? weaponAura.color : null, weaponAura?.tip ?? false);
-
-      // live sheathe toggle (Z key): the sim's weaponStowed bit moves held
-      // props between the hands and the on-back pose (self or a peer)
-      if (e.weaponStowed !== v.weaponStowed) {
-        v.weaponStowed = e.weaponStowed;
-        v.visual.setWeaponStowed(e.weaponStowed);
-      }
 
       // live body-size buffs (Fiesta power-ups): scale the whole group so the
       // rig, click proxy, and any form visual grow/shrink together.
@@ -8918,6 +9643,7 @@ export class Renderer {
       active.setShadowform(hasShadowform);
       active.setMoonkin(hasMoonkin);
       active.setMetamorph(hasMetamorph);
+      active.setRuneTint(characterRuneTintColor(e));
       v.visual.root.visible = active === v.visual && !fireballForm && !v.visualCompilePending;
       // saddle lift: the rider (click proxy included, a root child) sits at
       // the seat height while mounted; 0 whenever the mount is absent/hidden.
@@ -8947,7 +9673,7 @@ export class Renderer {
       // Derive both the swim pose and surface contact from the same displayed
       // coordinates. Network interpolation can lead or trail authoritative
       // snapshots, so mixing the two timelines produces a visible pose pop.
-      const wl = waterLevelAt(ax, az);
+      const wl = waterLevelAt(ax, az, this.sim.cfg.seed);
       const feetDepth = wl - ay;
       const floorSampleDepth = v.wasSwimming ? SWIM_EXIT_FEET_DEPTH : SWIM_ENTER_FEET_DEPTH;
       const floorDepth =
@@ -8955,10 +9681,47 @@ export class Renderer {
           ? wl - groundHeight(ax, az, this.sim.cfg.seed)
           : Number.NEGATIVE_INFINITY;
       const swimming = isSwimmingAtDepth(v.wasSwimming, e.dead, feetDepth, floorDepth);
+      // ...and the band under it, where the feet are wet but the ground is
+      // still doing the work. Read off the SAME displayed depth as the swim
+      // latch, so a body crossing a shoreline can never be both at once.
+      const wading = isWadingAtDepth(v.wasWading, swimming, e.dead, feetDepth);
+      v.wasWading = wading;
+
+      // Sheathe, from the Z key OR from being in the water: nobody swims with a
+      // sword in their hand. Swimming is an OVERLAY on the sim's cosmetic
+      // weaponStowed bit rather than a write to it — the player's own sheathe
+      // choice is untouched, so wading back out restores exactly what they had
+      // drawn, and a peer's weapon rides their back the moment they start
+      // swimming without any wire traffic. (This diff sits here, after the swim
+      // latch, precisely so both halves are known in the same frame.)
+      const stowed = e.weaponStowed || swimming;
+      if (stowed !== v.weaponStowed) {
+        v.weaponStowed = stowed;
+        v.visual.setWeaponStowed(stowed);
+      }
+      // Which stroke, and whether the body still breaks the surface at all. The
+      // sim owns the DEPTH (players dive with the dive key); this is the
+      // presentation read of it, taken off the same displayed coordinates as
+      // the swim latch so pose and splash can never disagree.
+      const submerged = isSubmergedAtDepth(
+        v.wasSubmerged,
+        swimming,
+        feetDepth,
+        active.height * e.scale,
+      );
       const vx = ax - v.lastX,
         vz = az - v.lastZ;
+      // Vertical travel, off the SAME displayed coordinates: how hard the body
+      // noses over into its dive or its climb. Taken from motion rather than
+      // from the local camera on purpose — peers pitch the same way with no
+      // wire traffic, and the pose can never disagree with the descent it is
+      // drawn against (at the bed, or held at the line, it levels out by
+      // itself). Only players ever leave the surface, so mobs skip it.
+      const vy = dt > 0 ? (ay - v.lastY) / dt : 0;
       v.lastX = ax;
       v.lastZ = az;
+      v.lastY = ay;
+      v.swimPitch = advanceSwimPitch(v.swimPitch, vy, swimming && e.kind === 'player', dt);
       const loco = updateLocomotionInto(v.locoState, v.loco, vx, vz, facing, dt);
       const moving = loco.moving;
       v.fireballTravelVisual = syncFireballTravelVisual(
@@ -8993,7 +9756,8 @@ export class Renderer {
         const heurSeed = this.sim.cfg.seed;
         let effGround = groundHeight(ax, az, heurSeed);
         if (inRift) {
-          const rf = this.sim.riftFloor!;
+          const rf = this.sim.riftFloor;
+          if (!rf) return;
           const floor = generateRiftFloor(rf.seed, rf.baseLevel, rf.floorIndex, rf.upgrade);
           effGround += riftLiftAt(floor, ax - rf.origin.x, az - rf.origin.z);
         }
@@ -9079,15 +9843,28 @@ export class Renderer {
       const logicallyMounted = e.mountKey !== '';
       const riderMounted = v.mountLift > 0;
       st.airborne = airborne && !riderMounted;
+      // Long-fall flail: displayed vertical speed past what any hop reaches
+      // (the same displayed-motion discipline as swimPitch, so peers flail
+      // identically with no wire traffic). Mounted riders never flail:
+      // st.airborne is already held false for them.
+      v.wasFalling = isFallingAtSpeed(v.wasFalling, st.airborne, vy);
+      st.falling = v.wasFalling;
       st.backwards = loco.backwards;
       st.reverseBackpedal = ghostWolf;
       st.dead = visuallyDead;
       st.casting = characterCasting;
+      // Which ability, so the pose layer can tell a drawn shot from a pet
+      // utility cast (tame_beast is a 6s cast; a bow must not sit aimed for it).
+      st.castingAbility = characterCasting ? (e.castingAbility ?? null) : null;
       st.spinning =
         st.casting &&
         e.castingAbility !== null &&
         ABILITIES[e.castingAbility]?.selfCentered === true;
       st.swimming = swimming;
+      st.submerged = submerged;
+      st.swimPitch = v.swimPitch;
+      st.wading = wading;
+      if (isSelf) this.selfSubmerged = submerged && !visuallyDead;
       // A mounted rider holds the seated pose (the sit loop reads as riding);
       // swim/cast still outrank it in desiredBaseState, so mounted casting
       // and swimming animate normally.
@@ -9168,6 +9945,9 @@ export class Renderer {
           v.stepAccum = FOOT_STRIDE_WALK * 0.6;
         }
       }
+      // Capture the flight's peak fall speed before the landing reset: the
+      // water-entry splash below scales with how hard the body came down.
+      const entryFallSpeed = v.fallSpeed;
       // Reset the flight's peak fall speed once grounded, so the next landing
       // is measured from its own drop and not the last one.
       if (!airborne) v.fallSpeed = 0;
@@ -9222,7 +10002,14 @@ export class Renderer {
           swimming,
         );
         if (waterImpact) {
-          const splashStrength = Math.min(1.65, 0.82 + loco.speed * 0.08 + contactImmersion * 0.25);
+          // Impact weight: only speed BEYOND a flat hop's landing (~6-7 yd/s)
+          // counts, so stepping or hopping in keeps the modest splash it
+          // always had while a flail-height plunge reads as a real burst.
+          const impactWeight = Math.max(0, entryFallSpeed - 7);
+          const splashStrength = Math.min(
+            2.4,
+            0.82 + loco.speed * 0.08 + contactImmersion * 0.25 + impactWeight * 0.11,
+          );
           this.waterView.enterContact(
             ax,
             az,
@@ -9241,7 +10028,7 @@ export class Renderer {
             az,
             entryDirX,
             entryDirZ,
-            contactRadius * 1.45,
+            contactRadius * (1.45 + Math.min(0.8, impactWeight * 0.055)),
             splashStrength,
           );
           v.waterContactActive = true;
@@ -9301,8 +10088,26 @@ export class Renderer {
         v.waterContactX = ax;
         v.waterContactZ = az;
       }
+      // Surface swimmers churn the water where their feet kick. A SUBMERGED
+      // swimmer emits nothing at all: there is no surface up there to break,
+      // and the quiet is the point of going under.
+      if (swimming && !submerged && !visuallyDead && charOnScreen && Number.isFinite(wl)) {
+        v.swimKickPhase += dt * SWIM_KICK_HZ * (0.55 + Math.min(1.1, loco.speed / 3.2));
+        if (v.swimKickPhase >= 1) {
+          v.swimKickPhase -= 1;
+          const trail = active.height * e.scale * SWIM_FOOT_TRAIL;
+          const footX = ax - contactAxisX * trail;
+          const footZ = az - contactAxisZ * trail;
+          const kick = Math.min(1.3, 0.5 + loco.speed * 0.09);
+          this.vfx.swimKickSplash(footX, wl, footZ, contactAxisX, contactAxisZ, kick);
+          this.waterView.addSplash(footX, footZ, contactRadius * 0.8, kick * 0.5);
+        }
+      } else {
+        v.swimKickPhase = 0;
+      }
       v.wasAirborne = airborne;
       v.wasSwimming = swimming;
+      v.wasSubmerged = submerged;
       // Distance-tiered mixer updates: near = every frame, mid = every Nth, the
       // animated far band = every 4th to 6th (the rig is still articulated, so
       // this is visible motion, just at a lower pose rate), and the frozen band
@@ -9457,6 +10262,37 @@ export class Renderer {
       if (!charOnScreen) v.group.visible = false;
     }
     this.lastVisibleRigCount = visibleRigCount;
+    this.drainWeaponSkinApplies();
+
+    // Night mob glow: a warm pool of light on the ground under every nearby body
+    // once it is properly dark, so a mob out in an unlit field still reads as a
+    // body. Driven here rather than from the entity loop above because all it
+    // needs is the final visibility that loop just settled plus the drawn
+    // position; the walk itself lives in the module that owns the pool.
+    //
+    // Outdoors only: the world clock does not govern a dungeon, a delve, the
+    // Last Keep, or the seabed, each of which runs its own authored rig. Without
+    // this, walking underground at world-midnight lit a pool under every mob and
+    // the same dungeon went dark again at world-noon, which is incoherent to a
+    // player who never saw the sky. `fogState` carries last frame's answer (it
+    // settles in updateAmbience, below the entity loop); one frame of discs on
+    // the way through a door is not worth reordering the frame for.
+    // Where the night light field runs, bodies light the ground through the
+    // terrain shader instead (real reactive light); the disc pool is the
+    // fallback tier's cue, so the field zeroes its amount rather than both
+    // layers warming the same ground twice.
+    const bodyGlow = this.fogState === 'outdoor' ? mobGlowAmount(this.dnGlobalNight) : 0;
+    this.mobNightGlow?.emit(
+      this.views,
+      sim.entities,
+      p.pos.x,
+      p.pos.z,
+      hasNightLightField() ? 0 : bodyGlow,
+    );
+    this.nightBodyLightCount =
+      hasNightLightField() && bodyGlow > 0.001
+        ? collectBodyNightLights(this.views, sim.entities, p.pos.x, p.pos.z, this.nightBodyLights)
+        : 0;
 
     // Hidden views skip their whole matrix subtree: three recomposes even
     // invisible hierarchies, and a distance-culled or off-screen rig is 30-60
@@ -9645,6 +10481,27 @@ export class Renderer {
       if (!priorState) this.flamePerceptualStates.set(f, state);
       if (state.emitsEmber) this.vfx.campfireEmber(state.worldPosition, dt);
     }
+    // Streetlamps light before the budget runs, not after: the budget and its
+    // flicker pass are what actually write light.intensity, and they read the
+    // baseIntensity this sets. Running it afterward would put a lamp's own level
+    // back on top of a light the governor had just budgeted out.
+    const lampGlow = lampGlowAmount(this.dnGlobalNight);
+    this.streetlamps?.update(lampGlow, this.time);
+    this.emberPools?.update(lampGlow, this.time);
+    this.campBraziers?.update(lampGlow, this.time);
+    // The night light field: every lamp and camp fire plus the nearby bodies
+    // collected above, packed into the terrain shader's uniform slots. Indoors
+    // the world clock does not govern the ground either, so the same fogState
+    // gate the discs use zeroes the whole field.
+    updateNightLightField(
+      p.pos.x,
+      p.pos.z,
+      this.fogState === 'outdoor' ? lampGlow : 0,
+      this.fogState === 'outdoor' ? mobGlowAmount(this.dnGlobalNight) : 0,
+      this.time,
+      this.nightBodyLights,
+      this.nightBodyLightCount,
+    );
     this.budgetFireLights(p.pos.x, p.pos.z, true);
     worldStart = this.markRendererWorldPhase(worldPhaseMs, 'lights', worldStart);
 
@@ -9654,8 +10511,11 @@ export class Renderer {
       this.camera.position.x,
       this.camera.position.z,
       (this.scene.fog as THREE.Fog).far,
+      this.camera.position.y,
     );
     worldStart = this.markRendererWorldPhase(worldPhaseMs, 'water', worldStart);
+    this.bgFx.update(this.time);
+    this.updateBgWards();
     this.vfx.update(dt);
     // Racing line (cosmetic; reads the self race view only).
     this.raceLine.update(this.sim.mountRaceView(), this.time, dt);
@@ -9693,6 +10553,19 @@ export class Renderer {
         dt,
         this.reducedMotion(),
       );
+    // Battleground keeps, gatehouses and towers fade when they come between the
+    // player and the chase camera (the same occluder-fade family every other
+    // interior-capable subsystem uses). A no-op loop while no field is built.
+    updateBattlegroundOccluderFades(
+      this.camera.position.x,
+      this.camera.position.y,
+      this.camera.position.z,
+      this.cameraLookAt.x,
+      this.cameraLookAt.y,
+      this.cameraLookAt.z,
+      dt,
+      this.reducedMotion(),
+    );
     this.yumiTeamMarkers.update(this.sim, this.views);
     this.tickValeCupFx(dt);
     worldStart = this.markRendererWorldPhase(worldPhaseMs, 'vfx', worldStart);
@@ -9712,6 +10585,39 @@ export class Renderer {
         ? Math.min((this.scene.fog as THREE.Fog).near, fogFar * 0.55)
         : (this.scene.fog as THREE.Fog).near;
     this.queueVisibleZonePrepares(Math.max(fogFar, this.lastRequestedFogFar));
+    // The player standing in a zone whose background prepare is still running
+    // escalates that build to fast pacing: the ground under their feet must
+    // not keep crawling in at idle-slot speed (a border walk arrives before
+    // the neighbour's idle prepare finishes by design; this is its handoff).
+    {
+      const standingZoneId = this.zoneIdAt(p.pos.x, p.pos.z);
+      if (standingZoneId !== null && this.pendingZonePrepares.has(standingZoneId)) {
+        this.terrainView.escalateZone(standingZoneId);
+      }
+      // ...and so does a NEIGHBOUR's unbuilt ground while it is holding the
+      // detail horizon in. Standing-zone-only escalation left the common case
+      // unserved: unbuilt ground a couple of hundred yards over a border
+      // collapses the horizon the player is looking through and hands the
+      // mid-field to the coarse vista mesh, which carries no splat texture and
+      // takes no shadows. (The clamp is directional now, so this fires on
+      // ground actually in frame rather than on anything within a radius; that
+      // makes it rarer, not less worth escalating.) Every prepare in flight is
+      // escalated rather than the one owning the binding chunk: the queue is
+      // urgency-ordered nearest-first and runs one zone at a time, so that is
+      // the same zone in all but a race, at no spatial-query cost. See
+      // detail_horizon_core.ts for why this is safe to leave on.
+      //
+      // Vista arm only, deliberately. The fogged arm hides the same clamp
+      // behind its murk wall rather than showing coarse ground through it, so
+      // the artifact this trades frame time for does not exist there, and its
+      // tiers are the ones least able to afford the trade.
+      const vistaOutdoor = this.farVista.enabled && this.fogState === 'outdoor';
+      if (vistaOutdoor && detailHorizonStarved(fogFar, this.lastRequestedFogFar)) {
+        for (const zoneId of this.pendingZonePrepares.keys()) {
+          this.terrainView.escalateZone(zoneId);
+        }
+      }
+    }
     this.terrainView.update(this.camera.position.x, this.camera.position.z, fogFar);
     this.farTerrainView.update(
       this.camera.position.x,
@@ -9790,7 +10696,22 @@ export class Renderer {
     worldStart = this.markRendererWorldPhase(worldPhaseMs, 'foliage', worldStart);
     this.fish.update(p.pos.x, p.pos.z, dt);
     this.motes.update(p.pos.x, p.pos.z, dt);
+    // The wilderness night layer rides beside the ambient motes: same
+    // player-centred streaming contract, but gated on real dark and anchored to
+    // world cells for the flora (see night_accents.ts).
+    // Same outdoor gate as the mob glow: mushrooms and fireflies belong to the
+    // sky's clock, so an instanced interior never grows them.
+    this.nightAccents?.update(
+      this.fogState === 'outdoor' ? wildGlowAmount(this.dnGlobalNight) : 0,
+      this.time,
+      dt,
+      p.pos.x,
+      p.pos.z,
+    );
     this.bladeGrass.update(p.pos.x, p.pos.z);
+    // fogFar here is subsystemCullFar(): the residency-clamped detail
+    // horizon, so band blades never stand past unbuilt ground
+    this.bladeGrassBand.update(p.pos.x, p.pos.z, fogFar, this.fogState === 'outdoor');
     this.cliffScree.update(p.pos.x, p.pos.z);
     this.realmFlora?.update(this.time);
     this.emberFeatures?.update(this.time);
@@ -9820,6 +10741,7 @@ export class Renderer {
     );
     worldStart = this.markRendererWorldPhase(worldPhaseMs, 'fish', worldStart);
     this.updateAmbience(p.pos.x, this.camera.position.y, dt);
+    this.updateUnderwater(dt);
     worldStart = this.markRendererWorldPhase(worldPhaseMs, 'ambience', worldStart);
     // shadow frustum follows the player
     const pv = this.views.get(p.id);
@@ -9828,24 +10750,36 @@ export class Renderer {
       this.updateKeyLight(pp);
     }
     worldStart = this.markRendererWorldPhase(worldPhaseMs, 'shadows', worldStart);
-    // sky dome + sun disc ride along with the camera
+    // sky dome + sun disc ride along with the camera. The battleground is
+    // OPEN-AIR: dome, sun, and weather render over the band exactly like the
+    // overworld (hiding them left a black void above the ramparts).
     this.sky.position.set(this.camera.position.x, 0, this.camera.position.z);
-    // The dome rides the camera, so it also serves Wildheart's open-air field.
-    this.sky.visible = this.fogState === 'outdoor' || this.fogState === 'wildheartField';
+    this.sky.visible = this.isOpenAirFog();
     if (this.sky.visible) {
       this.skyView.setCameraPos(this.camera.position.x, this.camera.position.z, dt);
       if (!this.lowGfx) {
         this.skyView.setDayNight(this.dnGrade.sky);
+        this.skyView.setCycle(
+          this.sunDir,
+          duskWarmAmount(this.sunDir.y),
+          nightSkyDesat(this.dnGrade.nightAmt),
+        );
         this.skyView.setFog((this.scene.fog as THREE.Fog).color);
         this.skyView.setStars(this.starAmt, this.time);
         this.updateEnvBiome(dt);
       }
     }
-    // precipitation only falls outdoors; indoors/underwater pass null to clear
+    // precipitation only falls outdoors; indoors/underwater pass null to clear.
+    // The sampler lets a neighbouring zone's weather fall inside the box while
+    // the player stands outside it (weather_field_core.ts).
+    // Precipitation is unlit, so it takes the grade explicitly or snow stays
+    // pure white at midnight. Same multiply as the fog and the water surface.
+    this.weather.setDayNight(this.dnGrade.fog);
     this.weather.update(
       this.camera.position,
       dt,
       this.fogState === 'outdoor' ? zoneBiomeAt(p.pos.x, p.pos.z) : null,
+      zoneBiomeAt,
     );
     worldStart = this.markRendererWorldPhase(worldPhaseMs, 'sky', worldStart);
     this.updateCelestialSprites();
@@ -10085,10 +11019,13 @@ export class Renderer {
   // light shafts fade in as the camera turns toward the sun, outdoor only
   private updateGodRays(): void {
     if (this.godRays.length === 0) return;
-    // Wildheart is open-air, but the long screen-space shafts read as giant
-    // triangles against its enclosed caldera rim. The basin keeps the sun,
-    // sky, and outdoor grade while reserving these shafts for the overworld.
-    const outdoor = this.fogState === 'outdoor';
+    // Wildheart and the Thornhollow hollow are open-air, but the long
+    // screen-space shafts read as giant triangles against an enclosed rim.
+    // Both keep the sun, sky, and outdoor grade while these shafts stay
+    // reserved for the overworld. Twilight and gloom realms also fade them
+    // completely through BIOME_GOD_RAYS, so skip their draw and math once the
+    // eased scale reaches zero.
+    const shafts = this.fogState === 'outdoor' && this.godRayZoneScale > 0.02;
     // azimuth-only alignment, the chase cam always pitches down while the
     // sun sits high, so a full 3D dot product would never light the shafts
     this.camera.getWorldDirection(this.tmpV);
@@ -10099,8 +11036,8 @@ export class Renderer {
     const side = this.tmpV.set(sunAzimuth.z, 0, -sunAzimuth.x); // sunAzimuth x up
     for (let i = 0; i < this.godRays.length; i++) {
       const sp = this.godRays[i];
-      sp.visible = outdoor;
-      if (!outdoor) continue;
+      sp.visible = shafts;
+      if (!shafts) continue;
       const sway = Math.sin(this.time * 0.13 + i * 2.1) * 10;
       // hang the shafts sunward of the camera but near eye height so they
       // cross a third-person frame instead of floating 150u overhead
@@ -10109,7 +11046,8 @@ export class Renderer {
         .addScaledVector(sunAzimuth, 48 + i * 26)
         .addScaledVector(side, (i - 1) * 30 + sway);
       sp.position.y = this.camera.position.y + 16 + i * 7;
-      sp.material.opacity = facing * facing * facing * (0.3 - i * 0.05) * this.sunUp;
+      sp.material.opacity =
+        facing * facing * facing * (0.3 - i * 0.05) * this.sunUp * this.godRayZoneScale;
     }
   }
 
@@ -10327,6 +11265,7 @@ export class Renderer {
     setRenderCategory(this.waterView.group, 'water');
     this.scene.add(this.waterView.group);
     freezeStaticSubtreeMatrices(this.waterView.group);
+    this.waterView.setWavesEnabled(this.waterRipplesEnabled);
     for (const zone of ZONES) {
       if (!this.preparedZones.has(zone.id)) continue;
       void this.waterView.ensureZone(zone).then((meshes) => {
@@ -10454,6 +11393,20 @@ export class Renderer {
     mirror.pitch = this.camPitch;
     mirror.dist = this.camDist;
 
+    // Follow a submerged swimmer UNDER the surface: a height CEILING folded
+    // into the one cy assignment below (the graphics-overhaul contract pins
+    // that the chase camera's coordinates are each assigned exactly once).
+    // The chase boom rides well above the avatar, and the built-in lakes are
+    // only three or four yards deep, so left alone the camera stays dry
+    // however far you dive - and the whole underwater pass (blue wash,
+    // bubbles, the breaststroke you are actually playing) would only ever be
+    // visible from a zoomed-in view. The ground clamp below still keeps the
+    // camera off the lake bed.
+    const swimWaterLevel = waterLevelAt(selfPos.x, selfPos.z, seed);
+    const underwaterCeilingY =
+      this.selfSubmerged && Number.isFinite(swimWaterLevel)
+        ? swimWaterLevel - UNDERWATER_CAMERA_DIP
+        : Infinity;
     // The camera orbits the lagged/led pivot at the player's requested
     // distance. Scene geometry never changes that distance; registered
     // obstructors fade through their subsystem's occluder-fade pass.
@@ -10462,7 +11415,7 @@ export class Renderer {
     const pz = this.camBoom.z + this.camFeel.leadZ;
     const eyeY = py + 2.0;
     const cx = px - Math.sin(pose.yaw) * Math.cos(pose.pitch) * pose.dist;
-    const cy = eyeY + Math.sin(pose.pitch) * pose.dist;
+    const cy = Math.min(eyeY + Math.sin(pose.pitch) * pose.dist, underwaterCeilingY);
     const cz = pz - Math.cos(pose.yaw) * Math.cos(pose.pitch) * pose.dist;
     let groundY = groundHeight(cx, cz, seed) + 0.6;
     // On a raised rift tier the flat ground clamp would let the camera sink
@@ -10510,7 +11463,7 @@ export class Renderer {
               : null;
       // Only at the water's edge / in it, sampled at the player, so a loose
       // threshold made the loop bleed across the low marsh from far off.
-      const nearWater = !inDungeon && groundHeight(px, pz, seed) < waterLevelAt(px, pz) + 0.4;
+      const nearWater = !inDungeon && groundHeight(px, pz, seed) < waterLevelAt(px, pz, seed) + 0.4;
       // Sowfield crowd bed: murmurs near the ground, swells while a match is
       // live (cupInfo is the IWorld mirror, so this works online too).
       const crowd = crowdAmbienceAt(px, pz, inDungeon, !!this.sim.cupInfo?.live);
@@ -10781,6 +11734,15 @@ export class Renderer {
     slot.mat.color.setHex(colorHex ?? SCHOOL_COLORS[school] ?? 0xffffff);
     if (!this.lowGfx) slot.mat.color.multiplyScalar(SELECTION_RING_BOOST);
     slot.ring.visible = true;
+  }
+
+  /** Apply the waterRipples setting: whether movement and splashes in water
+   *  feed the interactive wake height field (water_simulation.ts). Off (the
+   *  default) draws zero simulation passes; bubbles and splash particles are
+   *  unaffected. Live-safe: flipping it off mid-wake puts the field to sleep. */
+  setWaterRipples(enabled: boolean): void {
+    this.waterRipplesEnabled = enabled;
+    this.waterView.setWavesEnabled(enabled);
   }
 
   setGroundAimReticle(

@@ -112,7 +112,7 @@ export class GuildBankLogPane {
     return kind === 'loading'
       ? t('hudChrome.bank.logLoading')
       : kind === 'refused'
-        ? t('hudChrome.bank.logRefused')
+        ? t('hudChrome.bank.logUnavailable')
         : t('hudChrome.bank.logEmpty');
   }
 

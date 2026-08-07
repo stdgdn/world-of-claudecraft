@@ -24,9 +24,11 @@ ACTIONABLE (must be identical across every tier; never tiered):
 - The fishing bobber and its bite state. The reel window is a timed reaction; the bite
   affordance must read identically on every preset (splash richness may vary, the state
   may not).
-- The minimap gather-node markers: spotting, the per-viewer ready/cooldown state, and the
-  lock strike (the non-hue lock cue), plus the node tooltip's respawn countdown and
-  fine-grade preview lines.
+- The minimap and zone-map gather-node markers: spotting, the per-viewer ready/cooldown
+  state, and the lock strike (the non-hue lock cue), plus the node tooltip's respawn
+  countdown and fine-grade preview lines. Both surfaces (`minimap_markers` /
+  `minimap_painter` and `map_window_view` / `map_window_painter`) are pinned
+  profile-free by `tests/professions_graphics_fairness.test.ts`.
 - The node prop tier ladder in the 3D world (`nodeTierScale`): tier is actionable
   information expressed as SIZE, static on every preset.
 
@@ -149,6 +151,19 @@ it, so the boundary cannot creep back in as decoration.
   cap path for the sap).
 - `tests/auras_view.test.ts`: `isAuraDebuff` classifies a negative-value `buff_*` sap identically
   for the Sim aura and its `ClientWorld` mirror.
+- `tests/ability_vfx_stun_stars.test.ts`: the overhead stunned-star band (the "why can't I act"
+  tell, keyed off aura kind so every stun source reads) occupies the FIRST overlay slots, draws
+  identically at vfx quality 0, holds an alpha floor for the aura's whole life, and is bounded
+  by a band cap instead of a tier shed. The cap ranks bands in front of the camera ahead of
+  ones behind it, which is a fairness rule and not just polish: character self-culling is
+  enabled only on the tier that casts no sun shadow (`GFX.dynamicShadows` ->
+  `cullCharacters`), so on medium and above every stunned entity in interest range competes
+  for a slot, behind-camera ones included, while on low the offscreen non-actionable ones are
+  slept first. Ranking on raw camera distance would let a medium-tier player lose an on-screen
+  stun read that a low-tier player keeps. A band that still loses its slot is not dark: the
+  cast-moment sequence stands down only for bands that WON a slot, so a dropped one keeps
+  reading through the burst. Pinned skips: a dead body, a frustum-culled non-actionable rig,
+  and a cast-moment sequence for a band that is actually being drawn.
 
 ## Resolved: negative-value stat-sap auras now classify as debuffs in both worlds
 

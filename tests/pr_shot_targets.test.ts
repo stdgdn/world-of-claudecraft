@@ -57,18 +57,56 @@ describe('classifyDiff', () => {
     expect(captureSource).toContain("document.body.classList.contains('game-active')");
   });
 
-  it('captures the market overview, the buy confirmation, and expanded armor filters for market window changes', () => {
+  it('captures the stunned-star band for any ability-vfx subsystem change', () => {
+    const plan = classifyDiff(['src/render/ability_vfx/fx.ts']);
+    expect(plan.isVisual).toBe(true);
+    expect(plan.specific.map((t: { key: string }) => t.key)).toContain('stun-stars');
+    // Every module the band actually ships in resolves the target, the core
+    // included (its `when` prefix must not silently cover only the directory).
+    for (const path of [
+      'src/render/ability_vfx_core.ts',
+      'src/render/ability_vfx/painter.ts',
+      'src/render/ability_vfx/sequencer.ts',
+    ]) {
+      expect(classifyDiff([path]).specific.map((t: { key: string }) => t.key)).toContain(
+        'stun-stars',
+      );
+    }
+    const target = plan.specific.find((t: { key: string }) => t.key === 'stun-stars');
+    expect(target.variants).toEqual([
+      {
+        key: 'sundering-gavel-desktop',
+        charClass: 'paladin',
+        charName: 'Aurelius',
+        abilityId: 'hammer_of_justice',
+      },
+    ]);
+    // The stun must come from the real action-bar click, never an injected
+    // aura, and the poll must key off the aura KIND, the same read the band
+    // itself uses.
+    const captureSource = target.capture.toString();
+    expect(captureSource).not.toMatch(/sim\.castAbility\s*\(/);
+    expect(captureSource).not.toMatch(/auras\.push/);
+    expect(captureSource).toContain('.action-btn[data-hotbar-slot="1"]');
+    expect(captureSource).toContain('button.click()');
+    expect(captureSource).toContain("a.kind === 'stun'");
+    expect(captureSource).toContain("document.body.classList.contains('game-active')");
+  });
+
+  it('captures the market overview, collect ledger, buy confirmation, and expanded armor filters for market window changes', () => {
     const plan = classifyDiff(['src/ui/market_window.ts']);
     expect(plan.isVisual).toBe(true);
     expect(plan.specific.map((t: { key: string }) => t.key)).toEqual([
       'market-window',
+      'market-collect-ledger',
       'market-buy-confirm',
       'market-armor-filters',
     ]);
-    expect(plan.specific[2].variants).toEqual([
-      { key: 'desktop' },
-      { key: 'mobile', mobile: true },
-    ]);
+    // Keyed, not indexed: this asserts the ARMOR FILTERS target's variants, and a
+    // new market target landing ahead of it must not silently move the assertion
+    // onto a different target.
+    const armor = plan.specific.find((t: { key: string }) => t.key === 'market-armor-filters');
+    expect(armor?.variants).toEqual([{ key: 'desktop' }, { key: 'mobile', mobile: true }]);
   });
 
   it('captures the buy confirmation for its own pure core too, not just the painter', () => {

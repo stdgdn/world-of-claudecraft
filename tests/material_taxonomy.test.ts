@@ -2,12 +2,13 @@
 // membership pins for the derived source-or-reagent junk set behind the bank
 // "Deposit materials" sweep and the bags/bank Materials chip. The set is pinned
 // by EXACT-set equality against a literal id list (staples from the 2026-08-01
-// settlement plus raw fishing catches as junk cooking reagents), swept for
-// class exclusions by KIND against the live catalog (never by use type:
-// simple_fishing_pole is use-type 'fishing' and several tools carry no use at
-// all), and closed by a completeness tripwire that enumerates the ONLY
-// non-poor junk allowed to stay unclassified, so a future junk item must be
-// classified here explicitly instead of drifting in or out silently.
+// settlement plus raw fishing catches as junk cooking reagents, plus the claw
+// and tusk corpse-harvest materials), swept for class exclusions by KIND
+// against the live catalog (never by use type: simple_fishing_pole is
+// use-type 'fishing' and several tools carry no use at all), and closed by a
+// completeness tripwire that enumerates the ONLY non-poor junk allowed to
+// stay unclassified, so a future junk item must be classified here explicitly
+// instead of drifting in or out silently.
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -47,6 +48,7 @@ const HONEST_MATERIALS = [
   'bone_fragments',
   'cooking_salt',
   'copper_ore',
+  'curved_tusk',
   'elderwood_log',
   'fine_ashwood_log',
   'fine_copper_ore',
@@ -66,6 +68,7 @@ const HONEST_MATERIALS = [
   'ironbark_log',
   'linen_scrap',
   'prime_cut',
+  'pristine_claw',
   'pristine_hide',
   'pristine_silk',
   'pristine_venom_gland',
@@ -81,6 +84,7 @@ const HONEST_MATERIALS = [
   'resonant_thread',
   'resonant_timber',
   'rough_hide',
+  'sharp_claw',
   'silverleaf_herb',
   'smithing_flux',
   'spider_leg',
@@ -414,51 +418,71 @@ describe('isMaterialItem', () => {
 });
 
 describe('no src/sim importer (the module-evaluation hard rule)', () => {
+  // Two sim leaves carry the identical UI-only contract: material_taxonomy
+  // (this file's module) and material_profession_affinity (same hazard class,
+  // its header defers enforcement here). One walk guards both.
+  // liveImporter is the known consumer outside src/sim that keeps the regex
+  // honest as a positive control.
+  const GUARDED_MODULES = [
+    { name: 'material_taxonomy', liveImporter: '../src/ui/bag_filter.ts' },
+    {
+      name: 'material_profession_affinity',
+      liveImporter: '../src/ui/material_profession_hint_view.ts',
+    },
+  ] as const;
+
   // Matches import SPECIFIERS in every realistic form: from clauses (single or
   // multi-line), bare side-effect imports, dynamic import(), export-from
   // re-exports, and an optional .js/.ts suffix. The scan reads raw file text,
   // so a comment QUOTING a full import form would also match; that is accepted
   // over-matching for a fatal-class rule (prose mentions without a quoted
-  // specifier, like this sentence or the module header's, do not match).
-  const IMPORTER_RE = /(?:from|import)\s*\(?\s*['"][^'"]*material_taxonomy(?:\.[jt]s)?['"]/;
+  // specifier, like this sentence or the module headers', do not match).
+  const importerReFor = (moduleName: string): RegExp =>
+    new RegExp(`(?:from|import)\\s*\\(?\\s*['"][^'"]*${moduleName}(?:\\.[jt]s)?['"]`);
 
   it('the scan regex has teeth: it matches every importer form and skips prose', () => {
     // Positive control for the sweep below, so a future typo in the regex
     // cannot leave it permanently, invisibly green: it must match the LIVE
     // importer outside src/sim and every forbidden form, and stay quiet on
     // prose mentions.
-    const bagFilterSource = readFileSync(
-      fileURLToPath(new URL('../src/ui/bag_filter.ts', import.meta.url)),
-      'utf8',
-    );
-    expect(IMPORTER_RE.test(bagFilterSource)).toBe(true);
-    const forbidden = [
-      "import { isMaterialItem } from '../sim/material_taxonomy';",
-      'import { MATERIAL_ITEM_IDS } from "./material_taxonomy";',
-      "import '../material_taxonomy';",
-      "const lazy = await import('./material_taxonomy');",
-      "export * from './material_taxonomy';",
-      "export { isMaterialItem } from './material_taxonomy.js';",
-      "import probe from\n  './material_taxonomy.ts';",
-    ];
-    for (const form of forbidden) expect(IMPORTER_RE.test(form), form).toBe(true);
-    const prose = [
-      '// material_taxonomy.ts is a pure sim leaf',
-      '// see tests/material_taxonomy.test.ts for the census pins',
-      "const label = 'material_taxonomy';",
-    ];
-    for (const text of prose) expect(IMPORTER_RE.test(text), text).toBe(false);
+    for (const { name, liveImporter } of GUARDED_MODULES) {
+      const re = importerReFor(name);
+      const liveSource = readFileSync(
+        fileURLToPath(new URL(liveImporter, import.meta.url)),
+        'utf8',
+      );
+      expect(re.test(liveSource), `${name} live importer ${liveImporter}`).toBe(true);
+      const forbidden = [
+        `import { something } from '../sim/${name}';`,
+        `import { SOME_TABLE } from "./${name}";`,
+        `import '../${name}';`,
+        `const lazy = await import('./${name}');`,
+        `export * from './${name}';`,
+        `export { something } from './${name}.js';`,
+        `import probe from\n  './${name}.ts';`,
+      ];
+      for (const form of forbidden) expect(re.test(form), `${name}: ${form}`).toBe(true);
+      const prose = [
+        `// ${name}.ts is a pure sim leaf`,
+        `// see tests/${name}.test.ts for the census pins`,
+        `const label = '${name}';`,
+      ];
+      for (const text of prose) expect(re.test(text), `${name}: ${text}`).toBe(false);
+    }
   });
 
-  it('no src/sim file other than the module itself imports material_taxonomy', () => {
-    // MATERIAL_ITEM_IDS derives at module evaluation by reading the merged
-    // ITEMS table; a content-side importer would pull that derive inside
-    // data.ts's evaluation cycle, where load order decides between a crash and
-    // a clean run (the module header states the rule), so only a static scan
-    // catches it reliably.
+  it('no src/sim file other than each module itself imports it', () => {
+    // Both modules derive at module evaluation by reading content tables; a
+    // content-side importer would pull that derive inside the tables' own
+    // evaluation cycle, where load order decides between a crash and a clean
+    // run (each module header states the rule), so only a static scan catches
+    // it reliably.
     const simRoot = fileURLToPath(new URL('../src/sim', import.meta.url));
-    const moduleSelf = join(simRoot, 'material_taxonomy.ts');
-    const offenders: string[] = [];
+    const guards = GUARDED_MODULES.map(({ name }) => ({
+      re: importerReFor(name),
+      moduleSelf: join(simRoot, `${name}.ts`),
+      offenders: [] as string[],
+    }));
     const scanned: string[] = [];
     const symlinked: string[] = [];
     const walk = (dir: string): void => {
@@ -472,9 +496,12 @@ describe('no src/sim importer (the module-evaluation hard rule)', () => {
           walk(full);
         } else if (entry.name.endsWith('.ts')) {
           scanned.push(full);
-          if (full === moduleSelf) continue;
-          if (IMPORTER_RE.test(readFileSync(full, 'utf8'))) {
-            offenders.push(full);
+          const source = readFileSync(full, 'utf8');
+          for (const guard of guards) {
+            if (full === guard.moduleSelf) continue;
+            if (guard.re.test(source)) {
+              guard.offenders.push(full);
+            }
           }
         }
       }
@@ -487,8 +514,10 @@ describe('no src/sim importer (the module-evaluation hard rule)', () => {
     expect(scanned.length).toBeGreaterThan(300);
     expect(scanned.some((f) => f.includes(`${join(simRoot, 'professions')}/`))).toBe(true);
     expect(scanned.some((f) => f.includes(`${join(simRoot, 'content')}/`))).toBe(true);
-    expect(scanned).toContain(moduleSelf);
     expect(symlinked).toEqual([]);
-    expect(offenders).toEqual([]);
+    for (const guard of guards) {
+      expect(scanned, guard.moduleSelf).toContain(guard.moduleSelf);
+      expect(guard.offenders, guard.moduleSelf).toEqual([]);
+    }
   });
 });

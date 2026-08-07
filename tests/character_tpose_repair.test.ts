@@ -31,6 +31,9 @@ const anim = (over: Partial<AnimState> = {}): AnimState => ({
   dead: false,
   casting: false,
   swimming: false,
+  submerged: false,
+  swimPitch: 0,
+  wading: false,
   sitting: false,
   ...over,
 });

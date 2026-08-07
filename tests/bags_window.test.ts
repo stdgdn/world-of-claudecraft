@@ -36,6 +36,21 @@ describe('bags_window: no magic values', () => {
   });
 });
 
+describe('bags_window: accessibility contract', () => {
+  // Bags rides alongside vendor / trade / market (a non-modal companion window,
+  // per close()'s own comment), so it must NOT gain a focus trap here: it only
+  // needs the same role=dialog + accessible name every other window family
+  // member gets via markDialogRoot (mirrors bank_window.ts, which already calls
+  // this with its own title key).
+  it('marks the window as a dialog root with the bags title as its accessible name', () => {
+    expect(painter).toContain("markDialogRoot(el, { label: t('itemUi.bags.title') });");
+  });
+
+  it('does not install a focus trap (no modal:true) on the non-modal bags root', () => {
+    expect(painter).not.toMatch(/markDialogRoot\([^)]*modal:\s*true/);
+  });
+});
+
 describe('bags_window: load-bearing behaviors preserved', () => {
   it('uses the branded Claudium icon and matching balance color', () => {
     expect(hud).toContain('src="/claudium/icons/claudium_coin_64.webp"');
@@ -504,9 +519,11 @@ describe('bags_window: unknown-id stacks stay visible (stale-client guard, R34)'
     // The def-free corner glyph and its aria flag survive the missing def: a
     // bound or enchanted copy keeps its marker in both channels.
     expect(body).toContain('bagInstanceGlyphKind(s.instance)');
-    expect(body).toContain('t(UNKNOWN_GLYPH_ARIA_KEYS[glyphKind], {');
-    // Never the known cell's keys: those drop the UNKNOWN signal.
-    expect(body).not.toContain('BAG_GLYPH_ARIA_KEYS[glyphKind]');
+    expect(body).toContain('t(UNKNOWN_INSTANCE_GLYPH_ARIA_KEYS[glyphKind], {');
+    // Never the known cell's keys: those drop the UNKNOWN signal. The known
+    // map's name is a SUBSTRING of the unknown one, so the lookbehind keeps
+    // the legitimate UNKNOWN_INSTANCE_GLYPH_ARIA_KEYS use from matching.
+    expect(body).not.toMatch(/(?<!UNKNOWN_)INSTANCE_GLYPH_ARIA_KEYS/);
     expect(body).toContain('row.draggable = !this.deps.tradeOpen() && !this.deps.vendorOpen()');
     expect(body).toContain("row.addEventListener('dragstart'");
     expect(body).toContain("row.addEventListener('dragend'");

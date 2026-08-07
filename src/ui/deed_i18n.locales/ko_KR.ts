@@ -7,6 +7,46 @@
 import type { DeedLocaleTable } from '../deed_i18n';
 
 export const table: DeedLocaleTable = {
+  pvp_bg_first_capture: {
+    name: '손에 쥔 깃발',
+    desc: '쏜할로우 평원에서 깃발을 탈취하십시오.',
+  },
+  pvp_bg_first_win: {
+    name: '쏜할로우 사수',
+    desc: '쏜할로우 평원 전장에서 승리하십시오.',
+  },
+  pvp_bg_wins_25: {
+    name: '쏜할로우의 수호자',
+    desc: '쏜할로우 평원 전장에서 25회 승리하십시오.',
+    title: '기수',
+  },
+  pvp_bg_captures_100: {
+    name: '백 개의 깃발',
+    desc: '쏜할로우 평원에서 평생 깃발 100개를 탈취하십시오.',
+  },
+  dgn_rift: {
+    name: '균열 방랑자',
+    desc: '층 우두머리를 처치해 균열을 정복하십시오.',
+  },
+  dgn_rift_s_rank: {
+    name: '균열 군주',
+    desc: '균열이 생성될 수 있는 가장 어려운 등급인 S등급 균열을 정복하십시오.',
+  },
+  pvp_honor_sergeant: {
+    name: '병장',
+    desc: '평생 명예 10,000을 획득하십시오. 명예를 소비해도 계급은 사라지지 않습니다.',
+    title: '병장',
+  },
+  pvp_honor_knight_lieutenant: {
+    name: '기사-소위',
+    desc: '평생 명예 40,000을 획득하십시오. 진짜 전쟁을 한 계절 치른 셈입니다.',
+    title: '기사-소위',
+  },
+  pvp_honor_field_marshal: {
+    name: '원수',
+    desc: '평생 명예 150,000을 획득하십시오. 어느 서버에서든 드물며, 마땅히 그래야 합니다.',
+    title: '원수',
+  },
   chr_drakemaw_broodlord: {
     name: '둥지 파괴자',
     desc: '화산구의 둥지군주를 알 무더기 한복판에서, 포효와 가르기와 불길을 뚫고 처치하십시오.',
@@ -14,6 +54,54 @@ export const table: DeedLocaleTable = {
   chr_maw_matriarch: {
     name: '하늘의 침묵',
     desc: '화산구의 어미 신드랄레스를 드레이크모 위 분화구 둥지에서 처치하십시오.',
+  },
+  chr_frostveil_gatherer: {
+    name: '계단식 수확',
+    desc: 'Frostveil에서 광맥, 나무 군락, 약초밭을 수확합니다.',
+  },
+  chr_frostveil_first_cast: {
+    name: '산중 호수의 첫 얼음',
+    desc: 'Frostveil의 물가에서 물고기를 낚습니다.',
+  },
+  chr_amberfall_gatherer: {
+    name: 'Amberfall의 수확',
+    desc: 'Amberfall에서 광맥, 나무 군락, 약초밭을 수확합니다.',
+  },
+  chr_amberfall_first_cast: {
+    name: '큰 늪의 한 마리',
+    desc: 'Amberfall의 물가에서 물고기를 낚습니다.',
+  },
+  chr_nightbloom_gatherer: {
+    name: '꿈꾸는 수확',
+    desc: 'Nightbloom에서 광맥, 나무 군락, 약초밭을 수확합니다.',
+  },
+  chr_nightbloom_first_cast: {
+    name: '달샘의 잔물결',
+    desc: 'Nightbloom의 물가에서 물고기를 낚습니다.',
+  },
+  chr_wraithwood_gatherer: {
+    name: '나무 지붕 아래 수확',
+    desc: 'Wraithwood에서 광맥, 나무 군락, 약초밭을 수확합니다.',
+  },
+  chr_wraithwood_first_cast: {
+    name: '거울 만의 한 투척',
+    desc: 'Wraithwood의 물가에서 물고기를 낚습니다.',
+  },
+  chr_palmreach_gatherer: {
+    name: '야자 해변의 수확',
+    desc: 'Palmreach에서 광맥, 나무 군락, 약초밭을 수확합니다.',
+  },
+  chr_palmreach_first_cast: {
+    name: '사파이어 석호에 던진 낚싯줄',
+    desc: 'Palmreach의 물가에서 물고기를 낚습니다.',
+  },
+  chr_evergarden_gatherer: {
+    name: '정원의 화단이 준 선물',
+    desc: 'Evergarden에서 광맥, 나무 군락, 약초밭을 수확합니다.',
+  },
+  chr_evergarden_first_cast: {
+    name: '꽃잎 연못의 한 투척',
+    desc: 'Evergarden의 물가에서 물고기를 낚습니다.',
   },
   pvp_card_duel_first_win: {
     name: '패를 보여줘',
@@ -787,5 +875,33 @@ export const table: DeedLocaleTable = {
   chr_farshore_first_cast: {
     name: '갈매기는 알고 있다',
     desc: '먼바다 해안의 물에서 물고기 한 마리를 낚으십시오.',
+  },
+  prog_engineering_rare: {
+    name: '정밀 기계공학',
+    desc: '기계공학에서 처음으로 희귀 등급 아이템을 제작하십시오.',
+  },
+  prog_alchemy_rare: {
+    name: '희귀한 빈티지',
+    desc: '연금술에서 처음으로 희귀 등급 아이템을 제작하십시오.',
+  },
+  prog_cooking_rare: {
+    name: '잊지 못할 요리',
+    desc: '요리에서 처음으로 희귀 등급 아이템을 제작하십시오.',
+  },
+  prog_leatherworking_rare: {
+    name: '정교한 무두질',
+    desc: '가죽세공에서 처음으로 희귀 등급 아이템을 제작하십시오.',
+  },
+  prog_tailoring_rare: {
+    name: '명장의 바느질',
+    desc: '재봉에서 처음으로 희귀 등급 아이템을 제작하십시오.',
+  },
+  prog_weaponcrafting_rare: {
+    name: '광택이 날 때까지 담금질',
+    desc: '무기 제작에서 처음으로 희귀 등급 아이템을 제작하십시오.',
+  },
+  prog_armorcrafting_rare: {
+    name: '완벽을 향한 판금',
+    desc: '방어구 제작에서 처음으로 희귀 등급 아이템을 제작하십시오.',
   },
 };

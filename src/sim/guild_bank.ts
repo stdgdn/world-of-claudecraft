@@ -2,8 +2,9 @@
 // guild-scale sibling of the personal bank (bank.ts). Phase 1 (foundation)
 // landed the state model, the ONE load path, the per-guild book map helpers,
 // and the session-only membership stamp; Phase 2 (this file's op section)
-// lands the five op bodies and the proximity/rank-gated info read; the DB
-// persistence that feeds loadGuildBank/serializeGuildBank is Phase 3.
+// lands the five op bodies and the proximity/membership-gated info read (every
+// stamped member may LOOK, `canEdit` marks who may act); the DB persistence
+// that feeds loadGuildBank/serializeGuildBank is Phase 3.
 //
 // Books are keyed by the server social DB's guild id. Offline play never has a
 // guild, so the map stays empty and every IWorld guild-bank member is inert.
@@ -795,14 +796,18 @@ function normalizeGuildMembership(m: GuildMembership | null): GuildMembership | 
 // stays inert forever (offline play never has a guild).
 // ---------------------------------------------------------------------------
 
-/** The ranks the guild bank trusts, as a POSITIVE allowlist shared by the op
- *  gate (requireOfficerBook) and the info read (guildBankInfoFor) so the two
- *  can never drift into a phantom-window or a leak. Exactly leader and
- *  officer: a rank ever added to GUILD_RANKS (an initiate tier, say) is
- *  DENIED here until this set is deliberately revisited, because a shared
- *  treasury must fail closed, never open. tests/guild_bank.test.ts sweeps
- *  every rank through both gates and pins the passing set. */
-const GUILD_BANK_RANKS: ReadonlySet<GuildRank> = new Set(['leader', 'officer']);
+/** The ranks that may EDIT the guild bank, as a POSITIVE allowlist: the op
+ *  gate (requireOfficerBook) refuses everything outside it, and the info read
+ *  (guildBankInfoFor) stamps it onto the snapshot as `canEdit` so the client
+ *  renders a member's view read-only from the same fact that refuses their
+ *  ops. Exactly leader and officer: a rank ever added to GUILD_RANKS (an
+ *  initiate tier, say) is DENIED here until this set is deliberately
+ *  revisited, because a shared treasury must fail closed, never open. The
+ *  VIEW gate is deliberately wider (any stamped member: seeing the pooled
+ *  goods and their history is how the guild audits its officers), and
+ *  tests/guild_bank.test.ts sweeps every rank through both gates and pins
+ *  each passing set. */
+const GUILD_BANK_EDIT_RANKS: ReadonlySet<GuildRank> = new Set(['leader', 'officer']);
 
 /** Resolve the REQUIRED acting pid, refusing a non-integer at runtime. The
  *  facade types pid as required, but Sim.resolve falls back to the primary
@@ -815,8 +820,8 @@ function resolveActor(ctx: SimContext, pid: number): ReturnType<SimContext['reso
 
 /** The shared officer-plus authorization step every op runs AFTER the shape
  *  check: resolves the acting player's stamped membership and the guild's live
- *  book. A missing stamp and a rank outside GUILD_BANK_RANKS each REFUSE with
- *  a player line; a stamped guild whose book is not loaded returns silently,
+ *  book. A missing stamp and a rank outside GUILD_BANK_EDIT_RANKS each REFUSE
+ *  with a player line; a stamped guild whose book is not loaded returns silently,
  *  because that is a host wiring state (Phase 3 boot-loads every book before
  *  players join), not a condition the player caused or can act on. Never
  *  mutates. */
@@ -826,7 +831,7 @@ function requireOfficerBook(ctx: SimContext, meta: PlayerMeta): GuildBankState |
     ctx.error(meta.entityId, 'You must be in a guild to use the guild bank.');
     return null;
   }
-  if (!GUILD_BANK_RANKS.has(m.rank)) {
+  if (!GUILD_BANK_EDIT_RANKS.has(m.rank)) {
     ctx.error(meta.entityId, 'Only guild officers may use the guild bank.');
     return null;
   }
@@ -1082,7 +1087,9 @@ export function guildBankBuySlots(ctx: SimContext, pid: number): void {
  *  locked copy, so this only ever fires on a tampered or legacy Phase 3 row,
  *  which guildBankWithdraw also refuses: such a slot is dormant, and its
  *  boundTo / bindOnTrade fields (another character's bind identity) must not
- *  be broadcast to every officer just because the row exists. */
+ *  be broadcast to every guild member just because the row exists (the
+ *  audience this projection guards became guild-wide with the v0.35 member
+ *  read-only view; the projection itself is unchanged). */
 function guildBankSlotView(slot: InvSlot): InvSlot {
   const view = cloneInvSlot(slot);
   if (view.instance && guildBankPipeRefusal(slot) !== null) {
@@ -1091,21 +1098,24 @@ function guildBankSlotView(slot: InvSlot): InvSlot {
   return view;
 }
 
-/** The proximity + rank gated guild bank snapshot the server's maybe('guildBank')
- *  stream reads (the bankInfoFor pattern): null unless the player is alive,
- *  within reach of a banker NPC, stamped officer-plus, and their guild's book is
- *  loaded; else a boundary-cloned view. The DEAD gate is stricter than the
- *  personal bank's on purpose: the stream must go null on death, demotion,
- *  leave, and walk-away (each pinned in tests/guild_bank.test.ts). A pure read:
- *  it draws NO rng and never hands out live sim slot references. Ships the
- *  full instance payload for every slot the pipe policy allows, because
- *  officers co-own the pooled contents and a withdrawer needs the real
- *  payload (charges). A slot the policy REFUSES (only reachable from a
- *  tampered or legacy Phase 3 row, since deposit keeps locked copies out) is
- *  dormant and unwithdrawable, so it degrades to the publicInstanceView
- *  projection: no boundTo or armed bindOnTrade (another character's bind
- *  identity) rides the wire to every officer. The read and the withdraw gate
- *  therefore agree slot for slot. */
+/** The proximity + membership gated guild bank snapshot the server's
+ *  maybe('guildBank') stream reads (the bankInfoFor pattern): null unless the
+ *  player is alive, within reach of a banker NPC, stamped into a guild (ANY
+ *  rank: the view is guild-wide, only editing is officer-plus), and their
+ *  guild's book is loaded; else a boundary-cloned view whose `canEdit` flag
+ *  carries the GUILD_BANK_EDIT_RANKS verdict for the client's read-only
+ *  rendering. The DEAD gate is stricter than the personal bank's on purpose:
+ *  the stream must go null on death, leave, kick, and walk-away (each pinned
+ *  in tests/guild_bank.test.ts; a demotion to member keeps the stream and
+ *  drops only canEdit). A pure read: it draws NO rng and never hands out live
+ *  sim slot references. Ships the full instance payload for every slot the
+ *  pipe policy allows, because the guild co-owns the pooled contents and a
+ *  withdrawer needs the real payload (charges). A slot the policy REFUSES
+ *  (only reachable from a tampered or legacy Phase 3 row, since deposit keeps
+ *  locked copies out) is dormant and unwithdrawable, so it degrades to the
+ *  publicInstanceView projection: no boundTo or armed bindOnTrade (another
+ *  character's bind identity) rides the wire to the guild. The read and the
+ *  withdraw gate therefore agree slot for slot. */
 export function guildBankInfoFor(ctx: SimContext, pid: number): GuildBankInfo | null {
   const r = resolveActor(ctx, pid);
   if (!r) return null;
@@ -1113,23 +1123,28 @@ export function guildBankInfoFor(ctx: SimContext, pid: number): GuildBankInfo | 
   if (p.dead) return null;
   if (!nearBanker(ctx, p)) return null;
   const m = meta.guildMembership;
-  if (!m || !GUILD_BANK_RANKS.has(m.rank)) return null;
+  if (!m) return null;
   const book = ctx.guildBanks.get(m.guildId);
   if (!book) return null;
-  return bookSnapshot(book, guildBankSlotView);
+  return bookSnapshot(book, guildBankSlotView, GUILD_BANK_EDIT_RANKS.has(m.rank));
 }
 
 /** The one snapshot shape both reads hand back, parameterized ONLY by how a
- *  slot is viewed. Sharing the body keeps the player read and the operator read
- *  from drifting in capacity / price / ordering; the slot view is the single
- *  deliberate difference. */
-function bookSnapshot(book: GuildBankState, view: (slot: InvSlot) => InvSlot): GuildBankInfo {
+ *  slot is viewed and by the viewer's edit verdict. Sharing the body keeps the
+ *  player read and the operator read from drifting in capacity / price /
+ *  ordering; the slot view and canEdit are the two deliberate differences. */
+function bookSnapshot(
+  book: GuildBankState,
+  view: (slot: InvSlot) => InvSlot,
+  canEdit: boolean,
+): GuildBankInfo {
   return {
     treasury: book.treasury,
     slots: book.inventory.map(view),
     capacity: guildBankCapacity(book),
     purchasedSlots: book.purchasedSlots,
     nextExpansionPrice: guildBankNextExpansionPrice(book),
+    canEdit,
   };
 }
 
@@ -1148,7 +1163,9 @@ function bookSnapshot(book: GuildBankState, view: (slot: InvSlot) => InvSlot): G
 export function guildBankInfoForGuild(ctx: SimContext, guildId: number): GuildBankInfo | null {
   const book = ctx.guildBanks.get(guildId);
   if (!book) return null;
-  return bookSnapshot(book, cloneInvSlot);
+  // canEdit true: there is no acting player to rank-gate, and the operator
+  // consumers (the admin projection, the op-diff ledger) never read the flag.
+  return bookSnapshot(book, cloneInvSlot, true);
 }
 
 /** The operator escape hatch for a DORMANT guild bank slot: remove exactly one

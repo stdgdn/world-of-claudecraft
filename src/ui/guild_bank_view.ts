@@ -1,8 +1,10 @@
 // Pure view-core for the Guild tab of the Bank window (#bank-window), the
-// officer-plus pooled store read off the IWorld guildBankInfo mirror. DOM/Three/
-// i18n-free: it maps the proximity+rank-gated GuildBankInfo snapshot (null for
-// members, offline, away from a banker, dead, or while the book is not loaded)
-// to a flat render model the thin pane painter (guild_bank_window.ts) draws.
+// guild pooled store read off the IWorld guildBankInfo mirror. DOM/Three/
+// i18n-free: it maps the proximity+membership-gated GuildBankInfo snapshot
+// (null for the guildless, offline, away from a banker, dead, or while the
+// book is not loaded; `canEdit` false for a plain member, whose pane renders
+// READ-ONLY) to a flat render model the thin pane painter
+// (guild_bank_window.ts) draws.
 // Money stays RAW COPPER here; the painter formats it through the i18n
 // formatMoney / moneyHtml at the boundary (the BankBuySlotsModel.nextCost
 // precedent). Registered in UI_PURE_CORES; unit-tested against both Sim- and
@@ -100,7 +102,9 @@ export interface GuildBankCapacityModel {
 /** The treasury row: raw copper plus the two gold-action enablements. The
  *  enablement reads only SNAPSHOT state (never the live purse), so the render
  *  signature the window diffs stays purse-free: deposit is possible while the
- *  treasury is below its cap, withdraw while it holds anything. The per-prompt
+ *  viewer may edit and the treasury is below its cap, withdraw while the
+ *  viewer may edit and it holds anything (a read-only member's buttons are
+ *  always disabled; the pane's read-only note says why). The per-prompt
  *  maxima are resolved at prompt-open time from the live purse (see
  *  guildBankGoldDepositMax / guildBankGoldWithdrawMax). */
 export interface GuildBankTreasuryModel {
@@ -129,17 +133,24 @@ export interface GuildBankOpenModel {
   affordable: boolean;
 }
 
-/** The whole guild pane model: 'hidden' when guildBankInfo is null (member
- *  rank, offline, away, dead, or the book not loaded); 'unopened' while the
+/** The whole guild pane model: 'hidden' when guildBankInfo is null (guildless,
+ *  offline, away, dead, or the book not loaded); 'unopened' while the
  *  guild has bought no ladder rung yet (0 item slots: the treasury section
  *  renders as normal plus the open-the-bank row instead of the slot grid);
- *  else the populated grid + treasury + buy panel. */
+ *  else the populated grid + treasury + buy panel. `readOnly` (both visible
+ *  variants) is the snapshot's inverted canEdit: a plain member sees the pane
+ *  with every mutating affordance withheld and a note saying why. */
 export type GuildBankViewModel =
   | { kind: 'hidden' }
   | {
       kind: 'unopened';
       treasury: GuildBankTreasuryModel;
-      open: GuildBankOpenModel;
+      // Null for a read-only viewer: the open-the-bank row is an officer
+      // action, and modeling its absence here (rather than a painter branch
+      // on readOnly) keeps the purse out of the member pane's model entirely,
+      // so the window's refresh signature stays purse-free for them.
+      open: GuildBankOpenModel | null;
+      readOnly: boolean;
     }
   | {
       kind: 'guild';
@@ -150,8 +161,14 @@ export type GuildBankViewModel =
       // book with used > total) clamp to 0, never a negative pad.
       emptyCells: number;
       empty: boolean; // no occupied slots
-      buy: GuildBankBuySlotsModel;
+      // Null for a read-only viewer, like `open`. A DELIBERATE product choice,
+      // not just signature hygiene: the row is an officer purchase affordance,
+      // and the next-rung price it carries is procurement detail for the rank
+      // that can act on it, not shared-state a member audits (the treasury and
+      // contents, which members do audit, stay fully rendered).
+      buy: GuildBankBuySlotsModel | null;
       hasDormant: boolean; // any dormant slot present (drives the legend line)
+      readOnly: boolean;
     };
 
 /** Map the gated guild bank snapshot to the render model. `info` is null
@@ -166,10 +183,11 @@ export function buildGuildBankView(
   purseCopper: number,
 ): GuildBankViewModel {
   if (!info) return { kind: 'hidden' };
+  const readOnly = !info.canEdit;
   const treasury: GuildBankTreasuryModel = {
     copper: info.treasury,
-    canDepositGold: info.treasury < GUILD_BANK_TREASURY_CAP,
-    canWithdrawGold: info.treasury > 0,
+    canDepositGold: !readOnly && info.treasury < GUILD_BANK_TREASURY_CAP,
+    canWithdrawGold: !readOnly && info.treasury > 0,
   };
   if (guildBankRungsBought(info.purchasedSlots) === 0) {
     // No rung bought yet: the bank is unopened (0 item slots). Rung 0's price
@@ -179,7 +197,8 @@ export function buildGuildBankView(
     return {
       kind: 'unopened',
       treasury,
-      open: { price, affordable: Math.floor(purseCopper) >= price },
+      open: readOnly ? null : { price, affordable: Math.floor(purseCopper) >= price },
+      readOnly,
     };
   }
   const slots: GuildBankSlotModel[] = info.slots.map((slot, slotIndex) => {
@@ -208,18 +227,24 @@ export function buildGuildBankView(
     slots,
     emptyCells: Math.max(0, total - used),
     empty: used === 0,
-    buy: {
-      nextPrice: info.nextExpansionPrice,
-      blockSlots: GUILD_BANK_EXPANSION_SLOTS,
-      maxed: info.nextExpansionPrice === null,
-      affordable: info.nextExpansionPrice !== null && info.treasury >= info.nextExpansionPrice,
-    },
+    buy: readOnly
+      ? null
+      : {
+          nextPrice: info.nextExpansionPrice,
+          blockSlots: GUILD_BANK_EXPANSION_SLOTS,
+          maxed: info.nextExpansionPrice === null,
+          affordable: info.nextExpansionPrice !== null && info.treasury >= info.nextExpansionPrice,
+        },
     hasDormant: slots.some((s) => s.dormant),
+    readOnly,
   };
 }
 
 /** What a click on a guild bank slot does: a whole-stack withdraw, the split
- *  prompt (shift on a multi-count fungible), or nothing (empty cell). A DORMANT
+ *  prompt (shift on a multi-count fungible), or nothing (empty cell, or a
+ *  READ-ONLY viewer: a member's click inspects, never withdraws, and sending
+ *  the doomed op just to round-trip a refusal would spam the officer line at
+ *  someone who was told the pane is read-only). A DORMANT
  *  slot still sends the plain withdraw (never the split prompt): the sim
  *  refuses it with its own localized line, so the refusal round-trips through
  *  the facet instead of being silenced client-side, and the same path covers
@@ -234,8 +259,9 @@ export function guildBankSlotAction(
   slotIndex: number,
   shift: boolean,
   dormant: boolean,
+  readOnly: boolean,
 ): GuildBankSlotAction {
-  if (!slot) return { kind: 'none' };
+  if (!slot || readOnly) return { kind: 'none' };
   if (!dormant && shift && slot.count > 1 && !slot.instance) {
     return { kind: 'withdrawPartial', slotIndex, max: slot.count };
   }

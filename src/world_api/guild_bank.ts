@@ -2,9 +2,12 @@ import type { InvSlot } from '../sim/types';
 
 // ---------------------------------------------------------------------------
 // The Guild Bank: a shared, guild-owned treasury plus pooled item store, the
-// guild-scale sibling of the personal bank (bank.ts). Officer-plus only (leader
-// included): members get no data and no UI tab. guildBankInfo streams only
-// while an officer-plus stands at a banker NPC (the bankInfo pattern); offline
+// guild-scale sibling of the personal bank (bank.ts). Every guild member can
+// SEE it (the snapshot streams to any stamped member at a banker, `canEdit`
+// false), but only officer-plus (leader included) can EDIT: every op (deposit,
+// withdraw, gold moves, slot purchases) refuses a plain member server-side, and
+// the client renders the member view read-only. guildBankInfo streams only
+// while a member stands at a banker NPC (the bankInfo pattern); offline
 // play never has a guild, so the offline Sim reads null and every command is
 // inert. A new guild's bank is UNOPENED (0 item slots; treasury gold ops work
 // from day one): ladder rung 0 opens it for 24 slots, paid from the clicking
@@ -29,18 +32,25 @@ export interface GuildBankInfo {
   // Copper price of the NEXT ladder rung (table lookup, never client-supplied;
   // rung 0 is purse-paid, rungs 1+ treasury-paid), null once the ladder is done.
   nextExpansionPrice: number | null;
+  // True for officer-plus (leader included), the ranks the op gate accepts;
+  // false for a plain member, whose view is READ-ONLY. Server-computed from the
+  // membership stamp, never client-derived: the UI renders from this flag, and
+  // the sim refuses every op regardless of what a tampered client sends.
+  canEdit: boolean;
 }
 
 // ---------------------------------------------------------------------------
 // The guild bank ACTIVITY LOG: the social trust mechanism the officer-only
-// design rests on. Every guild bank op already writes an append-only
+// EDIT design rests on. Every guild bank op already writes an append-only
 // `bank_ledger` row; this read is what lets the guild SEE those rows, so a
 // quiet drain by one officer is visible to the rest instead of being knowledge
-// that exists only in the operator's database.
+// that exists only in the operator's database. Readable by EVERY guild member
+// (the same membership gate as the bank view itself), which is the point:
+// the members whose pooled goods the officers steward can see what moved.
 //
 // COLD DATA. It is fetched on demand when the log view opens (the
 // guildBankLog() read requests it), never on the 20 Hz snapshot stream: it is
-// identical for every officer of a guild, it changes only when the book does,
+// identical for every member of a guild, it changes only when the book does,
 // and 50 rows of prose have no business riding a movement frame.
 //
 // What a player is shown is deliberately NARROWER than what the ledger holds:
@@ -103,16 +113,17 @@ export interface GuildBankLogEntry {
 
 /** The whole log read. `loading` is the in-flight state (entries hold whatever
  *  the last successful response carried, so a refresh never blanks the pane);
- *  `refused` means the server declined the read (a member, a demotion mid-view,
- *  a lost guild), which the pane must say out loud rather than showing an
- *  empty list that reads as "no officer has ever done anything". */
+ *  `refused` means the server declined the read (a lost guild, a kick
+ *  mid-view, a walk-away), which the pane must say out loud rather than showing
+ *  an empty list that reads as "no officer has ever done anything". */
 export interface GuildBankLogView {
   state: 'loading' | 'ready' | 'refused';
   entries: readonly GuildBankLogEntry[];
 }
 
 export interface IWorldGuildBank {
-  // Non-null only while an officer-plus guild member stands at a banker NPC.
+  // Non-null only while a guild member (any rank) stands at a banker NPC;
+  // `canEdit` says whether the viewer may act on it or only look.
   guildBankInfo: GuildBankInfo | null;
   /** The guild bank activity log, fetched ON DEMAND: calling this is what
    *  REQUESTS it (there is no snapshot key for it), so a caller must only call

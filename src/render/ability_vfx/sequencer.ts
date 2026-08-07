@@ -2,6 +2,12 @@ import {
   type AbilityVfxFullSpec,
   type AbilityVfxMotif,
   abilityHexColor,
+  STUN_STAR_BRIGHTNESS,
+  STUN_STAR_COUNT,
+  STUN_STAR_LIFT,
+  STUN_STAR_RADIUS,
+  STUN_STAR_RATE,
+  STUN_STAR_SIZE,
 } from '../ability_vfx_core';
 import { isCrescendoArchetype, SPECTACLE } from './spectacle';
 
@@ -119,6 +125,11 @@ export interface SequencerHost {
     brightness: number,
   ): void;
   overlayCells(): { glow: number; star: number; rune: number; spark: number };
+  // True while the host holds a live aura-driven stunned-star band for this
+  // entity (fed this frame). The sequencer's cast-moment ccStars stand down
+  // for it, so one stun never draws two bands, and the full-alpha held band
+  // is never hidden behind the cast-moment band's fade-out tail.
+  heldStunStars(targetId: number): boolean;
   // One frame of the authored windup ceremony on an entity (drives the
   // sequencer's synthetic pre-release phase for instant casts).
   windupDraw(entityId: number, colorHex: number, progress: number, style: string): void;
@@ -1846,22 +1857,28 @@ export class ArchetypeSequencer {
         }
       }
     }
-    // stunned-star band over the victim's head
+    // Stunned-star band over the victim's head. The STUN_STAR_* constants are
+    // shared with the fx engine's held aura-driven band, and that band OWNS
+    // the read whenever the victim's stun aura is live (host.heldStunStars):
+    // this cast-moment band stands down for it (the timer still runs), so one
+    // stun never draws two bands and the held band's full alpha is never
+    // hidden behind this band's fade-out tail. It still draws alone for the
+    // aura-less cases (strike.stars flourishes, a cc read with no worn aura).
     if (slot.ccStars > 0) {
       slot.ccStars -= dt;
-      const head = host.anchorOf(slot.targetId, 1.0);
+      const head = host.heldStunStars(slot.targetId) ? null : host.anchorOf(slot.targetId, 1.0);
       if (head) {
-        for (let k = 0; k < 4; k++) {
-          const a = host.timeNow() * 2.4 + (k / 4) * Math.PI * 2;
+        for (let k = 0; k < STUN_STAR_COUNT; k++) {
+          const a = host.timeNow() * STUN_STAR_RATE + (k / STUN_STAR_COUNT) * Math.PI * 2;
           host.pushOverlay(
-            head.x + Math.cos(a) * 0.45,
-            head.y + 0.55,
-            head.z + Math.sin(a) * 0.45,
+            head.x + Math.cos(a) * STUN_STAR_RADIUS,
+            head.y + STUN_STAR_LIFT,
+            head.z + Math.sin(a) * STUN_STAR_RADIUS,
             slot.accent,
-            0.2,
+            STUN_STAR_SIZE,
             cells.star,
             Math.min(1, slot.ccStars),
-            2.2,
+            STUN_STAR_BRIGHTNESS,
           );
         }
       }

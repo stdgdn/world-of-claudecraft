@@ -2217,6 +2217,7 @@ export const DEEDS: Record<string, DeedDef> = {
     renown: 10,
     trigger: { kind: 'stat', stat: 'salvagesPerformed', count: 50 },
   },
+
   // Wildheart Basin (Palmreach). New records stay at the append-only tail.
   dgn_wildheart_basin: {
     id: 'dgn_wildheart_basin',
@@ -2304,6 +2305,53 @@ export const DEEDS: Record<string, DeedDef> = {
     renown: 10,
     trigger: { kind: 'visits', markIds: ['slain:old_marrowshell', 'slain:aurelhorn'] },
   },
+
+  // --- Thornhollow Fields, the 5v5 capture-the-flag battleground (src/sim/social/
+  // battleground.ts). Meters read the persisted PlayerMeta standing (bgWins /
+  // bgCaptures), so they count OUTCOMES, never attendance (rule 6), and
+  // retro-grant on load like every meter.
+  //
+  // The career-100 captures deed paces off BG_CAPS_TO_WIN, which was retuned
+  // from 5 to 3: a dominant winner now banks at most 3 captures per match
+  // rather than 5, so that deed's tail lengthens by roughly the same ratio.
+  // Left AS IS deliberately. The meter is career-cumulative with no time
+  // window, deeds are cosmetic-only (a title and Renown, never power), and
+  // re-cutting the threshold every time the match target moves would keep
+  // re-basing a number players are already partway through.
+  pvp_bg_first_capture: {
+    id: 'pvp_bg_first_capture',
+    name: 'Banner in Hand',
+    desc: 'Capture a flag in Thornhollow Fields.',
+    category: 'pvp',
+    renown: 5,
+    trigger: { kind: 'meter', meter: 'bgCaptures', amount: 1 },
+  },
+  pvp_bg_first_win: {
+    id: 'pvp_bg_first_win',
+    name: 'The Hollow Holds',
+    desc: 'Win a Thornhollow Fields battleground.',
+    category: 'pvp',
+    renown: 5,
+    trigger: { kind: 'meter', meter: 'bgWins', amount: 1 },
+  },
+  pvp_bg_wins_25: {
+    id: 'pvp_bg_wins_25',
+    name: 'Warden of the Hollow',
+    desc: 'Win 25 Thornhollow Fields battlegrounds.',
+    category: 'pvp',
+    renown: 25,
+    trigger: { kind: 'meter', meter: 'bgWins', amount: 25 },
+    reward: { kind: 'title', text: 'Flagbearer' },
+  },
+  pvp_bg_captures_100: {
+    id: 'pvp_bg_captures_100',
+    name: 'A Hundred Banners',
+    desc: 'Capture 100 flags in Thornhollow Fields across your career.',
+    category: 'pvp',
+    renown: 50,
+    trigger: { kind: 'meter', meter: 'bgCaptures', amount: 100 },
+  },
+
   // The phase 20 density pass brought the three bottom-map zones to the
   // strip's own gathering density (Q26 in
   // docs/design/professions-tuning-packet-review.md): each gets the zone
@@ -2398,6 +2446,261 @@ export const DEEDS: Record<string, DeedDef> = {
     // Rides the shipped kill quest (retro-grantable for every veteran who
     // already finished the chain), so the boss template needs no rare flag.
     trigger: { kind: 'quest', questId: 'q_dk_matriarch_of_the_maw' },
+  },
+
+  // Rifts (src/sim/rift/): the procedural infinite-dungeon system, ranked C
+  // through S. No single dungeonId exists to key a dungeonClears trigger
+  // against (every rift regenerates from a seed), so both deeds read a
+  // lifetime counter instead, bumped in rift/runs.ts on run completion.
+  dgn_rift: {
+    id: 'dgn_rift',
+    name: 'Riftwalker',
+    desc: 'Clear a Rift by defeating its floor boss.',
+    category: 'dungeon',
+    renown: 5,
+    trigger: { kind: 'stat', stat: 'riftClears', count: 1 },
+  },
+  dgn_rift_s_rank: {
+    id: 'dgn_rift_s_rank',
+    name: 'Rift Sovereign',
+    desc: 'Clear an S-rank Rift, the hardest tier a Rift portal can spawn.',
+    category: 'dungeon',
+    renown: 25,
+    trigger: { kind: 'stat', stat: 'riftSRankClears', count: 1 },
+  },
+
+  // Basic universal profession deeds, issue #2055: per-craft rare-tier
+  // milestones. Each fires off the craft_rare:<craftId> mark
+  // (professions/crafting.ts craftItem) the first time a player crafts a
+  // rare-or-better output IN THAT CRAFT. Output quality is a static fact of
+  // the recipe's result def (the Professions 2.0 output roll is retired), so
+  // this is never luck-based, only whether the player knows the recipe and
+  // holds the reagents: standard renown, no title, same tier as the other
+  // moderate profession-depth milestones (prog_fishing_100). Covers exactly
+  // the seven crafts that ship a rare-or-better recipe today (see
+  // tests/deeds_content.test.ts for the derivation): enchanting has no
+  // item-def output to grade, and jewelcrafting/inscription stay deferred
+  // with prog_ringwright (docs/design/deeds.md, no live recipes yet).
+  prog_engineering_rare: {
+    id: 'prog_engineering_rare',
+    name: 'Precision Engineering',
+    desc: 'Craft your first rare-tier item in Engineering.',
+    category: 'progression',
+    renown: 10,
+    trigger: { kind: 'visit', markId: 'craft_rare:engineering' },
+  },
+  prog_alchemy_rare: {
+    id: 'prog_alchemy_rare',
+    name: 'A Rare Vintage',
+    desc: 'Craft your first rare-tier item in Alchemy.',
+    category: 'progression',
+    renown: 10,
+    trigger: { kind: 'visit', markId: 'craft_rare:alchemy' },
+  },
+  prog_cooking_rare: {
+    id: 'prog_cooking_rare',
+    name: 'A Dish to Remember',
+    desc: 'Craft your first rare-tier item in Cooking.',
+    category: 'progression',
+    renown: 10,
+    trigger: { kind: 'visit', markId: 'craft_rare:cooking' },
+  },
+  prog_leatherworking_rare: {
+    id: 'prog_leatherworking_rare',
+    name: 'Fine Tanning',
+    desc: 'Craft your first rare-tier item in Leatherworking.',
+    category: 'progression',
+    renown: 10,
+    trigger: { kind: 'visit', markId: 'craft_rare:leatherworking' },
+  },
+  prog_tailoring_rare: {
+    id: 'prog_tailoring_rare',
+    name: "A Master's Stitch",
+    desc: 'Craft your first rare-tier item in Tailoring.',
+    category: 'progression',
+    renown: 10,
+    trigger: { kind: 'visit', markId: 'craft_rare:tailoring' },
+  },
+  prog_weaponcrafting_rare: {
+    id: 'prog_weaponcrafting_rare',
+    name: 'Tempered to a Shine',
+    desc: 'Craft your first rare-tier item in Weaponcrafting.',
+    category: 'progression',
+    renown: 10,
+    trigger: { kind: 'visit', markId: 'craft_rare:weaponcrafting' },
+  },
+  prog_armorcrafting_rare: {
+    id: 'prog_armorcrafting_rare',
+    name: 'Plated to Perfection',
+    desc: 'Craft your first rare-tier item in Armorcrafting.',
+    category: 'progression',
+    renown: 10,
+    trigger: { kind: 'visit', markId: 'craft_rare:armorcrafting' },
+  },
+  // The remaining starter-tier zones from the v0.32.0 expansion pick up the
+  // same chronicle pair the phase 20 pass gave Willowfen, Galecrest, and
+  // Farshore: identical infrastructure (starter-kit gather nodes plus the
+  // Vale-fallback catch table), just never wired to a deed. Drakelands
+  // already picked up its own pair (chr_drakemaw_broodlord,
+  // chr_maw_matriarch) with the v0.35.0 dragonkin brood rework, so this
+  // batch covers only the six zones that rework never touched. Copied
+  // line-for-line from the template above; renown 5 each.
+  chr_frostveil_gatherer: {
+    id: 'chr_frostveil_gatherer',
+    name: 'Terraced Harvest',
+    desc: 'Harvest an ore vein, a wood stand, and an herb patch in the Frostveil.',
+    category: 'chronicle',
+    renown: 5,
+    trigger: {
+      kind: 'visits',
+      markIds: ['gather:frostveil:ore', 'gather:frostveil:wood', 'gather:frostveil:herb'],
+    },
+  },
+  chr_frostveil_first_cast: {
+    id: 'chr_frostveil_first_cast',
+    name: 'First Ice on the Tarn',
+    desc: 'Catch a fish from the waters of the Frostveil.',
+    category: 'chronicle',
+    renown: 5,
+    trigger: { kind: 'visit', markId: 'fish:frostveil' },
+  },
+  chr_amberfall_gatherer: {
+    id: 'chr_amberfall_gatherer',
+    name: 'The Amberfall Harvest',
+    desc: 'Harvest an ore vein, a wood stand, and an herb patch in the Amberfall.',
+    category: 'chronicle',
+    renown: 5,
+    trigger: {
+      kind: 'visits',
+      markIds: ['gather:amberfall:ore', 'gather:amberfall:wood', 'gather:amberfall:herb'],
+    },
+  },
+  chr_amberfall_first_cast: {
+    id: 'chr_amberfall_first_cast',
+    name: 'A Catch from the Great Mere',
+    desc: 'Catch a fish from the waters of the Amberfall.',
+    category: 'chronicle',
+    renown: 5,
+    trigger: { kind: 'visit', markId: 'fish:amberfall' },
+  },
+  chr_nightbloom_gatherer: {
+    id: 'chr_nightbloom_gatherer',
+    name: 'The Dreaming Harvest',
+    desc: 'Harvest an ore vein, a wood stand, and an herb patch in the Nightbloom.',
+    category: 'chronicle',
+    renown: 5,
+    trigger: {
+      kind: 'visits',
+      markIds: ['gather:nightbloom:ore', 'gather:nightbloom:wood', 'gather:nightbloom:herb'],
+    },
+  },
+  chr_nightbloom_first_cast: {
+    id: 'chr_nightbloom_first_cast',
+    name: 'A Ripple on the Moonwell',
+    desc: 'Catch a fish from the waters of the Nightbloom.',
+    category: 'chronicle',
+    renown: 5,
+    trigger: { kind: 'visit', markId: 'fish:nightbloom' },
+  },
+  chr_wraithwood_gatherer: {
+    id: 'chr_wraithwood_gatherer',
+    name: 'Harvest Under the Canopy',
+    desc: 'Harvest an ore vein, a wood stand, and an herb patch in the Wraithwood.',
+    category: 'chronicle',
+    renown: 5,
+    trigger: {
+      kind: 'visits',
+      markIds: ['gather:wraithwood:ore', 'gather:wraithwood:wood', 'gather:wraithwood:herb'],
+    },
+  },
+  chr_wraithwood_first_cast: {
+    id: 'chr_wraithwood_first_cast',
+    name: 'A Cast in the Looking-Glass',
+    desc: 'Catch a fish from the waters of the Wraithwood.',
+    category: 'chronicle',
+    renown: 5,
+    trigger: { kind: 'visit', markId: 'fish:wraithwood' },
+  },
+  chr_palmreach_gatherer: {
+    id: 'chr_palmreach_gatherer',
+    name: 'Harvest on the Palmstrand',
+    desc: 'Harvest an ore vein, a wood stand, and an herb patch in the Palmreach.',
+    category: 'chronicle',
+    renown: 5,
+    trigger: {
+      kind: 'visits',
+      markIds: ['gather:palmreach:ore', 'gather:palmreach:wood', 'gather:palmreach:herb'],
+    },
+  },
+  chr_palmreach_first_cast: {
+    id: 'chr_palmreach_first_cast',
+    name: 'Casting the Sapphire Lagoon',
+    desc: 'Catch a fish from the waters of the Palmreach.',
+    category: 'chronicle',
+    renown: 5,
+    trigger: { kind: 'visit', markId: 'fish:palmreach' },
+  },
+  chr_evergarden_gatherer: {
+    id: 'chr_evergarden_gatherer',
+    name: "The Parterre's Bounty",
+    desc: 'Harvest an ore vein, a wood stand, and an herb patch in the Evergarden.',
+    category: 'chronicle',
+    renown: 5,
+    trigger: {
+      kind: 'visits',
+      markIds: ['gather:evergarden:ore', 'gather:evergarden:wood', 'gather:evergarden:herb'],
+    },
+  },
+  chr_evergarden_first_cast: {
+    id: 'chr_evergarden_first_cast',
+    name: 'A Cast on the Petal Pond',
+    desc: 'Catch a fish from the waters of the Evergarden.',
+    category: 'chronicle',
+    renown: 5,
+    trigger: { kind: 'visit', markId: 'fish:evergarden' },
+  },
+
+  // The WARFARE lifetime-honor ladder: what honor is FOR once the set is
+  // bought. The meter reads PlayerMeta.lifetimeHonor, which is monotonic
+  // (grantHonor only ever adds), so spending at the quartermaster can never
+  // take a rank back, and a veteran who earned the honor before these deeds
+  // shipped is credited by the join-time retro pass. Rank names follow the
+  // classic-era PvP ladder and lead up to Warmarshal Draven Kole, so the
+  // quartermaster reads as the top of the chain of command being climbed.
+  // Thresholds derive from a modelled ~900 honor per committed day of
+  // Thornhollow Fields (result honor plus the uncapped per-kill drip, after the
+  // per-opponent daily decay in src/sim/pvp/honor.ts), so roughly 11, 44 and 167
+  // committed days. Sergeant deliberately lands a little AFTER the 7,550-honor
+  // complete kit, so the first title rewards finishing the gear grind rather than
+  // being a step along it. The thresholds are the tunable here; the income
+  // assumption they rest on is written down so they can be moved with evidence
+  // rather than by feel.
+  pvp_honor_sergeant: {
+    id: 'pvp_honor_sergeant',
+    name: 'Sergeant',
+    desc: 'Earn 10,000 honor in your lifetime. Spending it never costs you the rank.',
+    category: 'pvp',
+    renown: 10,
+    trigger: { kind: 'meter', meter: 'lifetimeHonor', amount: 10_000 },
+    reward: { kind: 'title', text: 'Sergeant' },
+  },
+  pvp_honor_knight_lieutenant: {
+    id: 'pvp_honor_knight_lieutenant',
+    name: 'Knight-Lieutenant',
+    desc: 'Earn 40,000 honor in your lifetime, a season of real war behind you.',
+    category: 'pvp',
+    renown: 25,
+    trigger: { kind: 'meter', meter: 'lifetimeHonor', amount: 40_000 },
+    reward: { kind: 'title', text: 'Knight-Lieutenant' },
+  },
+  pvp_honor_field_marshal: {
+    id: 'pvp_honor_field_marshal',
+    name: 'Field Marshal',
+    desc: 'Earn 150,000 honor in your lifetime. Rare on any realm, and it should be.',
+    category: 'pvp',
+    renown: 50,
+    trigger: { kind: 'meter', meter: 'lifetimeHonor', amount: 150_000 },
+    reward: { kind: 'title', text: 'Field Marshal' },
   },
 };
 

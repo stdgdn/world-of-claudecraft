@@ -76,6 +76,7 @@ function makeInput(userAgent?: string) {
     onTargetFriendly: vi.fn(),
     onCycleFriendly: vi.fn(),
     onPet: vi.fn(),
+    onTargetPet: vi.fn(),
     onAbility: vi.fn(),
     onAbilityDown: vi.fn(),
     onAbilityUp: vi.fn(),
@@ -298,6 +299,8 @@ describe('Input autorun', () => {
       strafeLeft: false,
       strafeRight: false,
       jump: false,
+      dive: false,
+      surface: false,
     });
     expect(cb.onAbilityUp).toHaveBeenCalledWith(0);
   });
@@ -1433,6 +1436,20 @@ describe('Input touch invert-look', () => {
 
     expect(dragYawDelta).toBeGreaterThan(rawYawDelta * 1.5);
   });
+
+  it('honors the Touch Look Speed setting on the default one-finger swipe-drag path', () => {
+    const { input } = makeInput();
+    const baseYaw = input.camYaw;
+    input.applyTouchLookDelta(100, 0);
+    const defaultDelta = Math.abs(input.camYaw - baseYaw);
+
+    input.camYaw = baseYaw;
+    input.setTouchLookSpeed(2);
+    input.applyTouchLookDelta(100, 0);
+    const doubledDelta = Math.abs(input.camYaw - baseYaw);
+
+    expect(doubledDelta).toBeCloseTo(defaultDelta * 2);
+  });
 });
 
 describe('Input camera zoom (issue 1657)', () => {
@@ -1456,6 +1473,100 @@ describe('Input camera zoom (issue 1657)', () => {
     input.zoomBy(-5); // already at the min, no change
     expect(input.camDist).toBe(3);
     expect(changes).toEqual([]);
+  });
+});
+
+// Camera-steered swimming: the view IS the vertical stick. The band edges and
+// the resting pitch are load-bearing (a neutral camera must hold your depth),
+// and the steer inside the band is what turns the old on/off plunge into
+// something you can feather.
+describe('Input swim steer from the camera', () => {
+  it('holds depth at the resting camera pitch', () => {
+    const { input } = makeInput();
+    expect(input.camPitch).toBe(0.32);
+    const mi = input.readMoveInput();
+    expect(mi.dive).toBe(false);
+    expect(mi.surface).toBe(false);
+    expect(mi.swimSteer).toBe(0);
+  });
+
+  it('ramps the dive steer with how far past the threshold the STEERED view is aimed', () => {
+    // The bands read swimAimPitch (a steering look) and only act while a move
+    // key is held — pointing the camera at the lake bed while floating in
+    // place must not sink you (the WoW rule).
+    const { input, windowListeners } = makeInput();
+    windowListeners.get('keydown')!({ code: 'KeyW', repeat: false });
+    input.applyGamepadLook(0, 0.63 - input.camPitch); // steer just over the line
+    const shallow = input.readMoveInput();
+    input.applyGamepadLook(0, 1.3 - input.camPitch); // steer buried
+    const steep = input.readMoveInput();
+    expect(shallow.dive).toBe(true);
+    expect(steep.dive).toBe(true);
+    expect(shallow.swimSteer).toBeLessThan(0.2);
+    expect(steep.swimSteer).toBe(1);
+  });
+
+  it('ramps the surface steer the other way', () => {
+    const { input, windowListeners } = makeInput();
+    windowListeners.get('keydown')!({ code: 'KeyW', repeat: false });
+    input.applyGamepadLook(0, 0.04 - input.camPitch);
+    const shallow = input.readMoveInput();
+    input.applyGamepadLook(0, -0.4 - input.camPitch); // the clamp
+    const steep = input.readMoveInput();
+    expect(shallow.surface).toBe(true);
+    expect(steep.surface).toBe(true);
+    expect(shallow.swimSteer ?? 0).toBeLessThan(steep.swimSteer ?? 0);
+    expect(steep.swimSteer).toBe(1);
+  });
+
+  it('keeps the camera bands inert while no move key is held', () => {
+    const { input } = makeInput();
+    input.applyGamepadLook(0, 1.3 - input.camPitch); // steered hard down...
+    const mi = input.readMoveInput();
+    expect(mi.dive).toBe(false); // ...but floating in place: no sinking
+    expect(mi.surface).toBe(false);
+    expect(mi.swimSteer).toBe(0);
+  });
+
+  it('never steers off a pitch the steering looks did not write (left-drag orbit)', () => {
+    // A left-drag orbit moves camPitch without touching swimAimPitch: even
+    // with a move key held, sightseeing must not dive the swimmer.
+    const { input, windowListeners } = makeInput();
+    windowListeners.get('keydown')!({ code: 'KeyW', repeat: false });
+    input.camPitch = 1.3; // orbit-only pitch, no steering look involved
+    const mi = input.readMoveInput();
+    expect(mi.dive).toBe(false);
+    expect(mi.swimSteer).toBe(0);
+  });
+
+  it('quantises the steer, so a mouse twitch does not resend the input frame', () => {
+    const { input } = makeInput();
+    const seen = new Set<number | undefined>();
+    for (let i = 0; i <= 40; i++) {
+      input.camPitch = 0.62 + (i / 40) * (1.25 - 0.62);
+      seen.add(input.readMoveInput().swimSteer);
+    }
+    expect(seen.size).toBeLessThanOrEqual(7); // SWIM_STEER_STEPS + 1
+  });
+
+  it('latches the threshold, so a view resting on the line cannot chatter', () => {
+    const { input, windowListeners } = makeInput();
+    windowListeners.get('keydown')!({ code: 'KeyW', repeat: false });
+    input.applyGamepadLook(0, 0.63 - input.camPitch);
+    expect(input.readMoveInput().dive).toBe(true);
+    input.applyGamepadLook(0, 0.6 - input.camPitch); // inside the hysteresis
+    expect(input.readMoveInput().dive).toBe(true);
+    input.applyGamepadLook(0, 0.5 - input.camPitch); // clear of it
+    expect(input.readMoveInput().dive).toBe(false);
+  });
+
+  it('dives at full rate from the KEY, whatever the camera is doing', () => {
+    const { input, windowListeners } = makeInput();
+    input.camPitch = 0.32; // neutral: the camera is not steering
+    windowListeners.get('keydown')!({ code: 'ControlLeft', repeat: false });
+    const mi = input.readMoveInput();
+    expect(mi.dive).toBe(true);
+    expect(mi.swimSteer).toBe(1);
   });
 });
 

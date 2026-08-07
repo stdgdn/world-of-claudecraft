@@ -44,7 +44,11 @@ function baseEntity(id: number, pos: Vec3): Entity {
     onGround: true,
     jumping: false,
     fallStartY: pos.y,
+    swimStroke: 0,
+    swimDiving: false,
     fatigueTicks: 0,
+    breathUsedTicks: 0,
+    drownTicks: 0,
     hp: 1,
     maxHp: 1,
     resource: 0,
@@ -87,6 +91,7 @@ function baseEntity(id: number, pos: Vec3): Entity {
     blockValue: 0,
     castPushbackReduction: 0,
     knockbackResistance: 0,
+    ccDurationReduction: 0,
     moveSpeed: 7,
     hostile: false,
     targetId: null,
@@ -108,6 +113,17 @@ function baseEntity(id: number, pos: Vec3): Entity {
     gatherCastNodeId: '',
     gatherCastToolRarity: '',
     gatherCastEffectConfirmed: false,
+    craftCastRecipeId: '',
+    craftCastCommission: false,
+    craftCastBatchRemaining: 0,
+    craftCastBatchTotal: 0,
+    enchantCastItemId: '',
+    enchantCastBagSlot: 0,
+    enchantCastEnchantId: '',
+    enchantCastEquipSlot: '',
+    enchantCastConfirmReplace: false,
+    enchantCastTargetPin: '',
+    toolRechargeCastProfessionId: '',
     fishBiteAtTick: 0,
     fishReelDeadlineTick: 0,
     fishCastZoneId: '',
@@ -136,6 +152,7 @@ function baseEntity(id: number, pos: Vec3): Entity {
     eating: null,
     drinking: null,
     weaponStowed: false,
+    helmHidden: false,
     afk: false,
     aiState: 'idle',
     tappedById: null,
@@ -176,6 +193,7 @@ function baseEntity(id: number, pos: Vec3): Entity {
     petTauntTimer: 0,
     petPath: [],
     petPathCooldown: 0,
+    petOwnerHpBonus: 0,
     spawnPos: { ...pos },
     leashAnchor: null,
     evadeStall: 0,
@@ -486,7 +504,14 @@ export function recalcPlayerStats(
   s.spi = Math.max(0, s.spi);
 
   e.stats = s;
-  const warfare = pvpFractionsFromRatings(bonusPvpOffenseRating, bonusPvpDefenseRating);
+  // Set-granted WARFARE ratings join the per-item totals BEFORE the single
+  // resolve below, so the cap clamps the combined value exactly once. Clamping
+  // the set contribution separately first would produce a different number and
+  // disagree with the character sheet, which reads these same two fields.
+  const warfare = pvpFractionsFromRatings(
+    bonusPvpOffenseRating + setEff.pvpOffenseRating,
+    bonusPvpDefenseRating + setEff.pvpDefenseRating,
+  );
   e.stats.pvpOffense = warfare.offense;
   e.stats.pvpDefense = warfare.defense;
   // An over-level mainhand is inert like any other gear: fall back to unarmed
@@ -544,7 +569,12 @@ export function recalcPlayerStats(
   // Resolve the active weapon-skin cosmetic against the (possibly changed)
   // mainhand: swapping to a different weapon type drops a non-matching skin and
   // re-shows the matching one automatically. Cosmetic only; never feeds stats.
-  e.weaponSkinId = resolveActiveWeaponSkin(cls, e.mainhandItemId, e.weaponSkinLoadout);
+  e.weaponSkinId = resolveActiveWeaponSkin(
+    cls,
+    e.mainhandItemId,
+    e.weaponSkinLoadout,
+    e.skinCatalog,
+  );
   // Render-only mirror of the full worn set, copied so a later mutation of the
   // owning PlayerMeta.equipment never aliases into the entity. Synced in the
   // identity wire (terse `eq`) for the inspect-another-player window.
@@ -625,6 +655,7 @@ export function recalcPlayerStats(
   e.critDmgHealBonus = mods?.global.critDmgHealPct ?? 0;
   e.castPushbackReduction = setEff.castPushbackReduction;
   e.knockbackResistance = setEff.knockbackResistance;
+  e.ccDurationReduction = setEff.ccDurationReduction;
   // Floored at 0: an off-balance debuff (negative buff_dodge) can drive dodge to nothing.
   e.dodgeChance = Math.max(0, 0.05 + s.agi * 0.0005 + bonusDodge);
 
