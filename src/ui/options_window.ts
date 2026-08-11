@@ -232,6 +232,7 @@ const BIND_ACTION_LABEL_KEYS: Partial<Record<string, TranslationKey>> = {
   mount: 'hudChrome.keybinds.mount',
   deeds: 'hudChrome.deeds.title',
   professions: 'hudChrome.professions.title',
+  reliquary: 'hudChrome.reliquary.title',
 };
 
 /**
@@ -252,6 +253,9 @@ export interface OptionsWindowDeps {
   auraOverlays?: () => AuraOverlayHooks;
   /** The bug-report seam (online only; its presence gates the Report a Bug row). */
   bugReport(): BugReportHooks | null;
+  /** The Wiki row: Hud's confirm-first external hop (src/ui/wiki_link.ts). The
+   *  menu stays open so a Cancel lands the player back where they were. */
+  openWiki(): void;
   /** The keybind store (read labels, rebind, reset). */
   keybinds(): Keybinds;
   /** Display name for an action-bar slot's bound ability or item, or null when empty. */
@@ -579,6 +583,8 @@ export class OptionsWindow {
           this.view = a.view;
           this.keybindNote = '';
           this.render();
+        } else if (a.kind === 'wiki') {
+          this.deps.openWiki();
         } else if (a.kind === 'logout') {
           this.deps.options()?.logout();
         } else if (a.kind === 'unstuck') {

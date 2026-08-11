@@ -97,6 +97,7 @@ import {
   type GfxSettings,
   sharedUniforms,
 } from './gfx';
+import { runSlicedBuild } from './grass_build_slicer_core';
 import {
   type GrassCapCollapseBand,
   grassCapCollapseBand,
@@ -111,6 +112,7 @@ import {
   reorderInstanceDataByStableRank,
 } from './perceptual_lod_core';
 import { collectBuildingImpostors } from './props';
+import { makeShadowOnlyMaterial } from './shadow_only_material';
 import { freezeStaticMatrices } from './static_matrix';
 import { groundGrassColorAt, groundLushnessAt } from './terrain_chunk_build';
 import { type FlowerKind, flowerTuftTexture, grassTuftTexture } from './textures';
@@ -151,7 +153,6 @@ import { applySurfaceDetail, foliageWornFamilyFor } from './worn_stone';
 
 const GRASS_CHUNK_SIZE = 48;
 const GRASS_CHUNK_BUILD_BUDGET_MS = 2.2;
-const GRASS_CHUNK_MAX_BUILDS_PER_FRAME = 1;
 const GRASS_DENSITY_LOW = 0.38;
 const GRASS_DENSITY_HIGH = 0.5;
 // Per-biome grass density multipliers over the base above. The Reach is bare
@@ -275,6 +276,12 @@ function prepareFoliageSource(url: string): Promise<void> {
 
 /** Prepare the foliage source set selected by an explicit target profile. */
 export function prepareFoliageProfileAssets(target: Readonly<GfxSettings>): Promise<void> {
+  // Unlike the deferred BOOT lane below (unconditional on purpose: see the P0 comment
+  // there), filtering by `target` here is safe: this only runs from a live graphics
+  // rebuild (src/render/assets/graphics_profile.ts), which the coordinator always
+  // AWAITS before activating `target` and letting placement run against it - there is
+  // no "placement outruns this guess" window the way there is at boot.
+  //
   // Existing extracted URLs belong to the active renderer. Reload their
   // released source scenes before the coordinator clears derived caches, so
   // its old-profile rollback arm can still rebuild after a target failure.
@@ -289,23 +296,51 @@ const ALL_FOLIAGE_MODEL_URLS = new Set([
   ...Object.values(FOLIAGE_MODEL_URLS_HIGH).flat(),
   ...Object.values(FOLIAGE_MODEL_URLS_LOW).flat(),
 ]);
-let deferredFoliageModelUrls: ReadonlySet<string> | null = null;
-function deferredFoliageUrlsForBoot(): ReadonlySet<string> {
-  deferredFoliageModelUrls ??= new Set(Object.values(foliageModelUrlsFor(GFX)).flat());
-  return deferredFoliageModelUrls;
-}
+// Tier-INDEPENDENT on purpose (the v0.16.0 farmCrate P0; see
+// tests/render_asset_preload.test.ts): buildTrees() resolves modelUrls against the LIVE
+// GFX inside the Renderer constructor, which runs AFTER initGfxTier() re-resolves GFX
+// from the real WebGL gpuRenderer string (module-load GFX is only a pre-WebGL best
+// guess). The deferred lane opens (main.ts calls beginDeferredPreloads()) BEFORE that
+// renderer/initGfxTier exists, so a preload filtered to the import-time tier guess (this
+// used to gate on a `deferredFoliageUrlsForBoot()` snapshot frozen at whichever
+// leanFoliage value was live when the FIRST deferred thunk ran) can disagree with the
+// tier placement resolves moments later: buildTrees then asks for a HIGH-only variant
+// (pine_2/4/5, oak_2..5, ...) a LOW-guessed boot never fetched, and the synchronous
+// resolver throws "foliage model not preloaded: models/foliage/pine_2.glb", crashing
+// world entry. Every url is unconditionally prepared instead, so the set placement can
+// ever ask for is always already resident, at every tier, regardless of which guess was
+// live when the deferred lane opened.
 for (const url of ALL_FOLIAGE_MODEL_URLS) {
-  registerDeferredPreload(() => {
-    // Read GFX when the deferred lane opens, after startup safety and device
-    // defaults have settled. Non-target recipes stay cheap no-op tasks.
-    if (!deferredFoliageUrlsForBoot().has(url)) return Promise.resolve();
-    return prepareFoliageSource(url).then(() => {
-      // Packaged iOS still extracts each source as it lands so parsed scenes
-      // do not accumulate before the renderer build.
-      if (GFX.nativeIosMemoryProfile) extractParts(url);
-    });
-  });
+  registerDeferredPreload(() =>
+    prepareFoliageSource(url).then(() => {
+      // Every iOS WebKit host (Safari, other iOS browsers, and the packaged app) still
+      // extracts each source as it lands so parsed scenes do not accumulate before the
+      // renderer build - but only for a url the CURRENT tier guess actually places.
+      // extractParts bakes to float geometry and a converted material, which can
+      // OUTWEIGH the compressed source it replaces, so eagerly extracting every
+      // HIGH-only variant on a device that guessed lean would trade the crash this
+      // preload set exists to prevent for a permanent (session-long) memory cost on
+      // exactly the devices this profile protects. A url the guess excludes stays an
+      // un-extracted, un-released parsed source: cheaper than baking it for nothing,
+      // and still safe if the guess turns out wrong, because buildTrees() calls
+      // extractParts(url) itself (idempotent, cached) the moment placement actually
+      // needs it, same as it always has for every non-iOS profile.
+      if (GFX.iosMemoryProfile && Object.values(foliageModelUrlsFor(GFX)).flat().includes(url)) {
+        extractParts(url);
+      }
+    }),
+  );
 }
+
+/** Test-only view of the preload/placement tier-independence invariant above
+ *  (tests/render_asset_preload.test.ts). */
+export const foliagePreloadInternalsForTest = {
+  allFoliageModelUrls: (): ReadonlySet<string> => ALL_FOLIAGE_MODEL_URLS,
+  lowTierFoliageModelUrls: (): ReadonlySet<string> =>
+    new Set(Object.values(FOLIAGE_MODEL_URLS_LOW).flat()),
+  highTierFoliageModelUrls: (): ReadonlySet<string> =>
+    new Set(Object.values(FOLIAGE_MODEL_URLS_HIGH).flat()),
+};
 
 // Desaturated biome tints riding instanceColor. The textured models carry
 // their own hue, so tints are lerped most of the way to white before use
@@ -1191,17 +1226,6 @@ const v = new THREE.Vector3();
 const sv = new THREE.Vector3();
 const c = new THREE.Color();
 const zeroScale = new THREE.Vector3(0, 0, 0);
-const shadowOnlyMaterialCache = new WeakMap<THREE.Material, THREE.Material>();
-
-function makeShadowOnlyMaterial(src: THREE.Material): THREE.Material {
-  const cached = shadowOnlyMaterialCache.get(src);
-  if (cached) return cached;
-  const mat = src.clone();
-  mat.colorWrite = false;
-  mat.depthWrite = false;
-  shadowOnlyMaterialCache.set(src, mat);
-  return mat;
-}
 
 type MutableShadowVolume = {
   -readonly [K in keyof ShadowVolumeInput]: ShadowVolumeInput[K];
@@ -2329,6 +2353,8 @@ interface GrassChunk {
   centerZ: number;
   ready: boolean;
   queued: boolean;
+  /** True while a sliced build for this chunk is in flight across frames. */
+  building: boolean;
   lastSeen: number;
   lastUsed: number;
   prioritySq: number;
@@ -2338,6 +2364,14 @@ interface GrassChunk {
   flowerMesh?: THREE.InstancedMesh;
   flowerFullCount?: number;
   flowerTransitionCarry: number;
+}
+
+// The under-construction meshes of a sliced chunk build. They are parented
+// only in the finalize step, so a paused build never renders half-built; an
+// abandoned build releases them through this handle.
+interface GrassChunkPartialMeshes {
+  im: THREE.InstancedMesh | null;
+  fm: THREE.InstancedMesh | null;
 }
 
 // Tags every vertex of a tuft/flower card part with the aCap attribute the
@@ -2572,7 +2606,13 @@ function emptyGrassStats(
   return stats;
 }
 
-function buildGrassRing(parent: THREE.Group, seed: number): GrassRing {
+function buildGrassRing(
+  parent: THREE.Group,
+  seed: number,
+  // Injected so tests can drive the build budget with a fake clock; production
+  // always uses the real frame clock via the default.
+  now: () => number = () => performance.now(),
+): GrassRing {
   const baseRadius = GFX.grassRadius;
   const step = GFX.grassStep;
   const chunkCells = Math.ceil(GRASS_CHUNK_SIZE / step) + 3;
@@ -2782,6 +2822,7 @@ function buildGrassRing(parent: THREE.Group, seed: number): GrassRing {
       centerZ: chunkCenter(cz),
       ready: false,
       queued: false,
+      building: false,
       lastSeen: -1,
       lastUsed: -1,
       prioritySq: Infinity,
@@ -2793,13 +2834,24 @@ function buildGrassRing(parent: THREE.Group, seed: number): GrassRing {
   };
 
   const queueChunk = (chunk: GrassChunk): void => {
-    if (chunk.ready || chunk.queued) return;
+    if (chunk.ready || chunk.queued || chunk.building) return;
     chunk.queued = true;
     buildQueue.push(chunk);
   };
 
-  const buildChunk = (chunk: GrassChunk): void => {
-    const started = performance.now();
+  // A chunk build is a resumable generator: each yield marks a sub-unit
+  // boundary (setup, then one grid row per sub-unit, then finalize), and
+  // buildQueuedChunks below checks the frame budget BEFORE resuming each
+  // sub-unit. The rows a chunk produces depend only on chunk coordinates,
+  // seed, and the static tables (no clock reads between yields), so the
+  // finished geometry is byte-identical however the frames divide the work;
+  // only WHEN the rows run moves. `partial` exposes the under-construction
+  // meshes so an abandoned build can release them (they are parented only in
+  // the finalize step, so a paused chunk never renders half-built).
+  const buildChunk = function* (
+    chunk: GrassChunk,
+    partial: GrassChunkPartialMeshes,
+  ): Generator<undefined, void, undefined> {
     let n = 0;
     const chunkBiome = zoneBiomeAt(chunk.centerX, chunk.centerZ);
     // dense-grass biomes get a matching buffer so the extra tufts are never
@@ -2812,6 +2864,7 @@ function buildGrassRing(parent: THREE.Group, seed: number): GrassRing {
     im.frustumCulled = true;
     im.receiveShadow = true; // tufts must darken inside canopy shade, not glow through it
     im.count = 0;
+    partial.im = im;
     const fieldChunk = FIELD_BIOMES.has(chunkBiome);
     // a gale chunk that reaches the stable paddock's bloom band needs a
     // field-sized buffer, or the band's drifts hit the cap and vanish
@@ -2844,6 +2897,7 @@ function buildGrassRing(parent: THREE.Group, seed: number): GrassRing {
     fm.frustumCulled = true;
     fm.receiveShadow = true;
     fm.count = 0;
+    partial.fm = fm;
     let fn = 0;
 
     const minX = chunk.cx * GRASS_CHUNK_SIZE;
@@ -2871,6 +2925,7 @@ function buildGrassRing(parent: THREE.Group, seed: number): GrassRing {
             mw.x + mw.r > minX && mw.x - mw.r < maxX && mw.z + mw.r > minZ && mw.z - mw.r < maxZ,
         )
       : [];
+    yield; // setup (buffer allocation + chunk classification) is one sub-unit
 
     for (let i = i0; i <= i1 && n < chunkCap; i++) {
       for (let j = j0; j <= j1 && n < chunkCap; j++) {
@@ -2997,6 +3052,7 @@ function buildGrassRing(parent: THREE.Group, seed: number): GrassRing {
           }
         }
       }
+      yield; // one grid row per sub-unit: the budget gates between rows
     }
 
     // Authored meadows also bloom independent of grass anchors: the scrubby
@@ -3030,6 +3086,7 @@ function buildGrassRing(parent: THREE.Group, seed: number): GrassRing {
             fn++;
           }
         }
+        yield; // one meadow grid row per sub-unit
       }
     }
     // The Evergarden: no grass anchors exist (mown lawn), so the parterre
@@ -3060,6 +3117,7 @@ function buildGrassRing(parent: THREE.Group, seed: number): GrassRing {
             fn++;
           }
         }
+        yield; // one parterre grid row per sub-unit
       }
     }
     if (n > 0) {
@@ -3102,8 +3160,10 @@ function buildGrassRing(parent: THREE.Group, seed: number): GrassRing {
     }
     chunk.ready = true;
     builtChunks++;
-    lastBuildMs = Math.round((performance.now() - started) * 100) / 100;
-    buildMs = Math.round((buildMs + lastBuildMs) * 100) / 100;
+    // Ownership handed to the chunk (or dropped when a mesh stayed empty,
+    // exactly as before); the abandon path no longer needs to release them.
+    partial.im = null;
+    partial.fm = null;
   };
 
   const disposeChunk = (chunk: GrassChunk): void => {
@@ -3130,19 +3190,96 @@ function buildGrassRing(parent: THREE.Group, seed: number): GrassRing {
     }
   };
 
+  // The one in-flight sliced build. runSlicedBuild checks the budget BEFORE
+  // resuming each sub-unit, so a frame never pays more than the budget plus
+  // the one sub-unit that crossed the deadline, where the old
+  // check-after-build paid a whole chunk (18.6ms observed against the 2.2ms
+  // budget). Stated honestly, that bound is the budget plus FINALIZE: the
+  // grid-row sub-units are small, but the finalize sub-unit (stable-rank
+  // reorder over every instance, trim, bounding spheres, parenting, freeze)
+  // runs unsliced, so it is the largest single step a frame can absorb.
+  // Slicing finalize further is a possible follow-up; any new yield must
+  // land BEFORE the parenting writes, or abandonActiveBuild below would
+  // strand a parented partial mesh. An oversized chunk simply spans more
+  // frames; its pop-in when ready is the same pop-in the queue already
+  // implied, just a few frames later.
+  let activeBuild: {
+    chunk: GrassChunk;
+    job: { step(): boolean };
+    partial: GrassChunkPartialMeshes;
+    activeMs: number;
+  } | null = null;
+
+  const startChunkBuild = (chunk: GrassChunk): void => {
+    const partial: GrassChunkPartialMeshes = { im: null, fm: null };
+    const gen = buildChunk(chunk, partial);
+    chunk.building = true;
+    activeBuild = { chunk, job: { step: () => !gen.next().done }, partial, activeMs: 0 };
+  };
+
+  const abandonActiveBuild = (): void => {
+    if (!activeBuild) return;
+    // Partial meshes were never parented, so they never rendered: disposing
+    // releases their instance buffers without touching the shared geometry
+    // or material. The chunk rebuilds from scratch if it comes back into
+    // range, producing the same geometry (the build is a pure function of
+    // chunk coordinates and seed).
+    activeBuild.partial.im?.dispose();
+    activeBuild.partial.fm?.dispose();
+    activeBuild.chunk.building = false;
+    activeBuild = null;
+  };
+
+  // Builds run until the frame budget is spent, however many chunks that
+  // completes: the pre-sub-unit deadline check inside runSlicedBuild is the
+  // worst-frame bound, so a cheap chunk finishing early hands its remaining
+  // budget to the next queued chunk instead of discarding it. (An older
+  // one-completion-per-frame cap predated slicing, when the deadline was only
+  // consulted AFTER a whole chunk built; kept after slicing it capped
+  // COMPLETIONS, starving ring fill while a many-frame chunk was in flight
+  // and dropping unspent budget after each finish. Per-frame parenting cost
+  // needs no cap of its own: finalize, the step that parents, is one
+  // sub-unit, so the budget already meters it.)
   const buildQueuedChunks = (): void => {
-    if (buildQueue.length === 0) return;
-    buildQueue.sort((a, b) => a.prioritySq - b.prioritySq || a.key.localeCompare(b.key));
-    const deadline = performance.now() + buildBudgetMs;
-    let built = 0;
-    while (buildQueue.length > 0 && built < GRASS_CHUNK_MAX_BUILDS_PER_FRAME) {
-      const chunk = buildQueue.shift();
-      if (!chunk) break;
-      chunk.queued = false;
-      if (chunks.get(chunk.key) !== chunk || chunk.ready || chunk.lastSeen !== generation) continue;
-      buildChunk(chunk);
-      built++;
-      if (performance.now() >= deadline) break;
+    if (!activeBuild && buildQueue.length === 0) return;
+    const deadline = now() + buildBudgetMs;
+    let sorted = false;
+    for (;;) {
+      if (activeBuild) {
+        const { chunk } = activeBuild;
+        // A mid-build chunk that left the streamed window (or was retired)
+        // is abandoned rather than finished into a hidden mesh.
+        if (chunks.get(chunk.key) !== chunk || chunk.lastSeen !== generation) {
+          abandonActiveBuild();
+          continue;
+        }
+      } else {
+        if (buildQueue.length === 0) return;
+        if (!sorted) {
+          buildQueue.sort((a, b) => a.prioritySq - b.prioritySq || a.key.localeCompare(b.key));
+          sorted = true;
+        }
+        const chunk = buildQueue.shift();
+        if (!chunk) return;
+        chunk.queued = false;
+        if (chunks.get(chunk.key) !== chunk || chunk.ready || chunk.building) continue;
+        if (chunk.lastSeen !== generation) continue;
+        // Starting a build costs nothing yet: the generator body only runs
+        // once runSlicedBuild passes its first pre-step budget check.
+        startChunkBuild(chunk);
+      }
+      const active = activeBuild;
+      if (!active) continue;
+      const sliceStart = now();
+      const outcome = runSlicedBuild(active.job, deadline, now);
+      active.activeMs += now() - sliceStart;
+      if (outcome === 'paused') return;
+      active.chunk.building = false;
+      activeBuild = null;
+      // grassLastBuildMs is the chunk's total active build time summed over
+      // its slices (inter-frame waiting excluded), same meaning as before.
+      lastBuildMs = Math.round(active.activeMs * 100) / 100;
+      buildMs = Math.round((buildMs + lastBuildMs) * 100) / 100;
     }
   };
 
@@ -3268,7 +3405,13 @@ function buildGrassRing(parent: THREE.Group, seed: number): GrassRing {
       uniforms.uPlayerPos.value.set(px, pz);
       uniforms.uFadeFar.value = activeRadius();
       if (px > DUNGEON_X_THRESHOLD) {
-        // dungeon instances live far outside the strip — no meadow indoors
+        // dungeon instances live far outside the strip: no meadow indoors.
+        // This branch returns before buildQueuedChunks, so a build paused
+        // mid-chunk would otherwise hold its two chunkCap instance buffers
+        // for the whole dungeon run; abandon it instead (the chunk rebuilds
+        // byte-identically on return, exactly like leaving the streamed
+        // window).
+        abandonActiveBuild();
         if (parent.visible) {
           parent.visible = false;
           for (const chunk of chunks.values()) {
@@ -3322,7 +3465,8 @@ function buildGrassRing(parent: THREE.Group, seed: number): GrassRing {
       stats.grassQuality = Math.round(quality * 100) / 100;
       stats.grassActiveRadius = activeRadius();
       stats.grassChunks = chunks.size;
-      stats.grassQueuedChunks = buildQueue.length;
+      // The in-flight sliced build still counts as queued work until ready.
+      stats.grassQueuedChunks = buildQueue.length + (activeBuild ? 1 : 0);
       stats.grassBuiltChunks = builtChunks;
       stats.grassDisposedChunks = disposedChunks;
       stats.grassLastBuildMs = lastBuildMs;

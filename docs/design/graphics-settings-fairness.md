@@ -59,6 +59,17 @@ COSMETIC (may be tiered down on lower presets):
     that differs between two players looking at the same wearer, and it can only dim.
   What is faded is decoration ON a weapon. The wearer, their nameplate, their cast bar, their
   auras, their position and the weapon model itself are untouched at every scale.
+- The deed border accent's decorative bloom (the Book of Deeds border rewards worn in-world).
+  The accent is IDENTITY: it encodes no health, range, rank, or threat, so it may never be
+  hidden, but its outer glow is pure richness. The identity arms are tier-invariant by
+  construction: the nameplate cartouche is canvas shapes resolved from entity state on the
+  same cadence as the title text (no tier input on the accent path, pinned by the path scan
+  in `tests/deed_border_accent.test.ts`), and the portrait ring's frame border, edge outline,
+  and inset shadow never read a tier token (pinned by the CSS arm of the same suite). The ONE
+  tier-scaled quantity is the ring's outer box-shadow bloom, which rides `--fx-shadow` (0 at
+  low) exactly like the sibling portrait combat glow. The ring also repaints on the existing
+  low-tier target-frame body throttle (about 10 Hz, target swap bypasses), a redraw-smoothness
+  shed this list already sanctions for the portrait.
 
 The test for any new tier knob: if a knob hides or delays something a player READS AND REACTS
 TO, it is not allowed. If it only reduces visual richness or redraw smoothness, it is fine.
@@ -180,19 +191,29 @@ it, so the boundary cannot creep back in as decoration.
   own geometry only (pinned to its two arguments), every sample it takes is one the exact drape
   would also have taken, and the marks it is allowed to thin at all are bounded by a world-space
   sample-spacing cap, so no mark's footprint, radius or position can move with it.
-- `tests/ability_vfx_stun_stars.test.ts`: the overhead stunned-star band (the "why can't I act"
-  tell, keyed off aura kind so every stun source reads) occupies the FIRST overlay slots, draws
-  identically at vfx quality 0, holds an alpha floor for the aura's whole life, and is bounded
-  by a band cap instead of a tier shed. The cap ranks bands in front of the camera ahead of
-  ones behind it, which is a fairness rule and not just polish: character self-culling is
-  enabled only on the tier that casts no sun shadow (`GFX.dynamicShadows` ->
-  `cullCharacters`), so on medium and above every stunned entity in interest range competes
-  for a slot, behind-camera ones included, while on low the offscreen non-actionable ones are
-  slept first. Ranking on raw camera distance would let a medium-tier player lose an on-screen
-  stun read that a low-tier player keeps. A band that still loses its slot is not dark: the
-  cast-moment sequence stands down only for bands that WON a slot, so a dropped one keeps
-  reading through the burst. Pinned skips: a dead body, a frustum-culled non-actionable rig,
-  and a cast-moment sequence for a band that is actually being drawn.
+- `tests/ability_vfx_cc_bands.test.ts`: the held crowd-control bands (the "why can't I act"
+  tell: yellow stars over a stunned victim, violet wisps over a feared one, green shards at a
+  rooted one's ankles, each keyed off what the SIM says the victim wears so every source reads,
+  mob stomps and ensnare affixes included) occupy the FIRST overlay slots, draw identically at
+  vfx quality 0, hold an alpha floor for the aura's whole life, and are bounded by a band cap
+  instead of a tier shed. One band per victim, the most severe worn, and ONE shared cap across
+  all three types (`MAX_CC_BANDS`), so adding types never widens the batch claim. The cap ranks
+  by severity first, then bands in front of the camera ahead of ones behind it, which is a
+  fairness rule and not just polish: character self-culling is enabled only on the tier that
+  casts no sun shadow (`GFX.dynamicShadows` -> `cullCharacters`), so on medium and above every
+  controlled entity in interest range competes for a slot, behind-camera ones included, while
+  on low the offscreen non-actionable ones are slept first. Ranking on raw camera distance
+  would let a medium-tier player lose an on-screen CC read that a low-tier player keeps. A band
+  that still loses its slot is not dark: the cast-moment sequence stands down only for bands
+  that WON a slot, so a dropped one keeps reading through the burst. Pinned skips: a dead body,
+  a frustum-culled non-actionable rig, and a cast-moment sequence for a band that is actually
+  being drawn.
+  The band's TYPE is itself actionable, not decoration, which is why the cast-moment stand-down
+  answers on any band type rather than stun alone: the `cc` archetype flashes the same yellow
+  stars for every control ability, so a rooted victim would otherwise read as stunned for the
+  burst's length. Each band is also separated from the others on two axes at once, colour and
+  motion signature (ring position, sprite shape, and the fear band's vertical bob), so the
+  distinction survives for a colourblind player rather than resting on hue alone.
 
 ## Resolved: negative-value stat-sap auras now classify as debuffs in both worlds
 

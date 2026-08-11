@@ -193,6 +193,13 @@ const HUD_UPDATE_DRIVES: readonly DriveRow[] = [
     why: 'reads the STATIC graphics-preset stamp that tiers several cadences below it; no DOM write',
   },
   {
+    call: 'this.resolvePendingLoadoutBar',
+    band: 'frame',
+    gate: '',
+    surface: 'none',
+    why: 'applies a server-acked loadout bar swap the moment activeLoadout confirms (v0.29 class stack); early-returns to bookkeeping only on ordinary frames, no DOM write',
+  },
+  {
     call: 'this.reconcileSfx',
     band: 'fast',
     gate: '',
@@ -291,6 +298,13 @@ const HUD_UPDATE_DRIVES: readonly DriveRow[] = [
     why: 'one-shot latch that reloads the saved action-bar layout once',
   },
   {
+    call: 'this.paladinDevotionPainter.paint',
+    band: 'frame',
+    gate: '',
+    surface: 'chrome',
+    why: 'write-elided paladin Devotion/Ascension resource widget driven by the paladinDevotionView core',
+  },
+  {
     call: 'this.syncActiveHotbarForm',
     band: 'frame',
     gate: '',
@@ -385,6 +399,63 @@ const HUD_UPDATE_DRIVES: readonly DriveRow[] = [
     gate: "p.resourceType === 'energy'",
     surface: 'chrome',
     why: 'shows the combo-point row for energy users, through the elided writer',
+  },
+  {
+    call: 'this.writerFacet.setAttr',
+    band: 'frame',
+    gate: "p.resourceType === 'energy'",
+    sites: 4,
+    surface: 'chrome',
+    why: 'combo-row a11y state (aria hidden/valuenow/valuetext/label), elided writer',
+  },
+  {
+    call: 'this.writerFacet.setAttr',
+    band: 'frame',
+    gate: "!(p.resourceType === 'energy')",
+    surface: 'chrome',
+    why: 'hides the combo row for non-energy classes, through the elided writer',
+  },
+  {
+    call: 'this.doomMeter.paint',
+    band: 'frame',
+    gate: '',
+    surface: 'chrome',
+    why: 'write-elided Warlock Doom meter driven by its own view core',
+  },
+  {
+    call: 'this.procOverlayPainter.paintNecromancyCharges',
+    band: 'frame',
+    gate: "this.sim.talentSpec === 'demonology'",
+    surface: 'chrome',
+    why: 'Demonology necromancy charge pips on the proc overlay',
+  },
+  {
+    call: 'this.procOverlayPainter.paintDestructionMarks',
+    band: 'frame',
+    gate: "!(this.sim.talentSpec === 'demonology') && this.sim.talentSpec === 'destruction'",
+    surface: 'chrome',
+    why: 'Destruction burn marks on the proc overlay',
+  },
+  {
+    call: 'this.procOverlayPainter.paintChronoCharges',
+    band: 'frame',
+    gate: "!(this.sim.talentSpec === 'demonology') && !(this.sim.talentSpec === 'destruction') && this.sim.talentSpec === 'arcane'",
+    surface: 'chrome',
+    why: 'Chronomancy charge pips on the proc overlay',
+  },
+  {
+    call: 'this.procOverlayPainter.paintFrostCharges',
+    band: 'frame',
+    gate: "!(this.sim.talentSpec === 'demonology') && !(this.sim.talentSpec === 'destruction') && !(this.sim.talentSpec === 'arcane') && this.sim.talentSpec === 'frost'",
+    surface: 'chrome',
+    why: 'Frost icicle pips on the proc overlay',
+  },
+  {
+    call: 'this.procOverlayPainter.paint',
+    band: 'frame',
+    gate: "!(this.sim.talentSpec === 'demonology') && !(this.sim.talentSpec === 'destruction') && !(this.sim.talentSpec === 'arcane') && !(this.sim.talentSpec === 'frost')",
+    surface: 'chrome',
+    why: 'the generic proc overlay for every spec without its own charge readout',
   },
   {
     call: 'this.comboRowEl.appendChild',
@@ -581,27 +652,6 @@ const HUD_UPDATE_DRIVES: readonly DriveRow[] = [
     gate: "!this.procOverlayPreviewed && this.sim.talentSpec === 'fire'",
     surface: 'chrome',
     why: 'clears that preview after 8 s; a one-shot behind the same latch, not a repeating driver',
-  },
-  {
-    call: 'this.procOverlayPainter.paintChronoCharges',
-    band: 'frame',
-    gate: "this.sim.talentSpec === 'arcane'",
-    surface: 'chrome',
-    why: 'the proc overlay driven by Aether Surge charges',
-  },
-  {
-    call: 'this.procOverlayPainter.paintFrostCharges',
-    band: 'frame',
-    gate: "!(this.sim.talentSpec === 'arcane') && this.sim.talentSpec === 'frost'",
-    surface: 'chrome',
-    why: 'the frost arm of the same overlay',
-  },
-  {
-    call: 'this.procOverlayPainter.paint',
-    band: 'frame',
-    gate: "!(this.sim.talentSpec === 'arcane') && !(this.sim.talentSpec === 'frost')",
-    surface: 'chrome',
-    why: 'the Heating Up / Hot Streak arm, the default for every other spec',
   },
   {
     call: 'this.auraOverlayController.paint',
@@ -969,6 +1019,18 @@ const HUD_UPDATE_DRIVES: readonly DriveRow[] = [
     why: 'the ready-check popup; a bare-named module the painter gate does not sweep',
   },
   {
+    call: 'this.bgProposalPopup.render',
+    band: 'medium',
+    gate: 'this.bgProposalPopup.isOpen',
+    surface: 'window',
+    guard: {
+      kind: 'module',
+      module: 'hud/battleground/battleground_proposal_popup.ts',
+      proof: VIEW_SIG_BLOCK,
+    },
+    why: 'the battleground queue-pop prompt; a *_popup name the painter gate does not sweep either',
+  },
+  {
     call: 'this.valeCupWindow.render',
     band: 'medium',
     gate: "$('#valecup-window').style.display === 'block'",
@@ -1186,12 +1248,33 @@ const HUD_UPDATE_DRIVES: readonly DriveRow[] = [
     why: 'the Book of Deeds window',
   },
   {
+    call: 'this.reliquaryWindow.refreshIfChanged',
+    band: 'slow',
+    gate: 'this.reliquaryWindow.isOpen',
+    surface: 'window',
+    guard: {
+      kind: 'module',
+      module: 'reliquary_window.ts',
+      proof:
+        'const input = this.buildInput(); const sig = this.sigFromInput(input); if (sig === this.lastSig) return;',
+    },
+    why: 'The Reliquary window',
+  },
+  {
     call: 'this.refreshOpenProfessionSurfacesIfChanged',
     band: 'slow',
     gate: '',
     surface: 'window',
     guard: { kind: 'hud', proof: 'if (sig === this.lastProfessionSurfaceSig) return;' },
     why: 'repaints the character window and the crafting window when a profession number moves',
+  },
+  {
+    call: 'this.refreshCharSheetIfChanged',
+    band: 'slow',
+    gate: '',
+    surface: 'window',
+    guard: { kind: 'hud', proof: 'if (sig === this.lastCharSheetSig) return;' },
+    why: 'converges the open character sheet on its whole progression block: the WORN title / border (the deeds picker repaints only itself), the earned border badges, and the Reliquary pair plus Curator rank',
   },
   {
     call: 'this.professionsWindow.refreshIfChanged',
@@ -1228,6 +1311,13 @@ const HUD_UPDATE_DRIVES: readonly DriveRow[] = [
     gate: '',
     surface: 'chrome',
     why: 'the always-on deed tracker (not gated on a window)',
+  },
+  {
+    call: 'this.updateReliquaryTracker',
+    band: 'slow',
+    gate: '',
+    surface: 'chrome',
+    why: 'the always-on Reliquary tracker (not gated on a window): pinned pages fill from normal play and an illuminated page drops off',
   },
   {
     call: 'this.calendarWindow.refreshIfChanged',
@@ -1480,7 +1570,12 @@ describe('Hud.update() drives exactly the registered set, on the registered band
     expect(
       bySurface,
       "the surface split moved. A new call needs its surface decided; a CHANGED one means a repaint was reclassified, which is the one edit that can quietly drop a window row's invalidation guard.",
-    ).toEqual({ window: 44, chrome: 75, none: 16 });
+      // Both sides of every v0.36.0 sync move this bucket split independently
+      // (the branch's reliquary window row and the char-sheet latch against the
+      // release's own window/chrome churn), so it cannot be reconciled by
+      // arithmetic across a merge. The numbers below were set from a suite run
+      // on the merged tree, not from either side's narrative.
+    ).toEqual({ window: 47, chrome: 82, none: 17 });
     const windows = HUD_UPDATE_DRIVES.filter((r) => r.surface === 'window');
     expect(windows.map((r) => r.call)).toContain('this.spellbookWindow.tickOpen');
     expect(windows.map((r) => r.call)).toContain('this.refreshOpenTownFocusIfChanged');
@@ -1492,8 +1587,15 @@ describe('Hud.update() drives exactly the registered set, on the registered band
     for (const row of HUD_UPDATE_DRIVES)
       if (row.guard) byKind[row.guard.kind] = (byKind[row.guard.kind] ?? 0) + 1;
     expect(byKind, 'a guard kind changed: say why in the PR, not only in the table').toEqual({
-      module: 22,
-      hud: 6,
+      // Reliquary cold window (module) + craft-cast single-surface strip (hud)
+      // both land on this pin; keep both counts, do not drop either side.
+      // 24 = both sides of the v0.36.0 sync counted 23 alone (the branch's
+      // reliquary module guard vs the release's new module-guarded row).
+      module: 24,
+      // 7 = Phase 20's refreshCharSheetIfChanged. Its latch is a HUD field
+      // (lastCharSheetSig), like its profession sibling, because the cold
+      // char_window painter holds no signature of its own to diff.
+      hud: 7,
       callsite: 12,
       none: 4,
     });
@@ -1533,9 +1635,12 @@ describe('Hud.update() drives exactly the registered set, on the registered band
         'deeds_window.ts: if (sig === this.lastSig) return;',
         'dungeon_finder_proposal_popup.ts: if (view.sig !== this.lastSig) {',
         'dungeon_finder_window.ts: if (sig === this.lastSig) {',
+        'hud/battleground/battleground_proposal_popup.ts: if (view.sig !== this.lastSig) {',
         'hud.ts: if (craftCastActivitySig(session) !== this.lastCraftingCastSig) {',
         'hud.ts: if (craftingReagentSig(this.sim.inventory, this.sim.player.name) === this.lastCraftingReagentSig) return;',
         'hud.ts: if (sig !== this.lastLootSettingsSig) {',
+        // Phase 20: the progression-block latch for the open character sheet.
+        'hud.ts: if (sig === this.lastCharSheetSig) return;',
         'hud.ts: if (sig === this.lastProfessionSurfaceSig) return;',
         'hud.ts: if (sig === this.lastTownFocusSig) return;',
         'hud.ts: if (sig === this.lastTradeSig) return;',
@@ -1550,6 +1655,7 @@ describe('Hud.update() drives exactly the registered set, on the registered band
         // sig binding): render() re-latches lastSig from the one input it
         // painted, so the band never re-acts on a stale signature.
         'professions_window.ts: const input = this.buildInput(); const sig = professionsRefreshSig(input); if (sig === this.lastSig) return;',
+        'reliquary_window.ts: const input = this.buildInput(); const sig = this.sigFromInput(input); if (sig === this.lastSig) return;',
         'social_window.ts: if (struct !== this.lastStruct) {',
         // #2519 replaced the joined signature string this used to build every frame with
         // an in-place comparison against the retained numbers; same guard, same place, no
@@ -1583,6 +1689,7 @@ describe('Hud.update() drives exactly the registered set, on the registered band
     ).toBeGreaterThan(15);
     expect(modules.filter((m) => !adapterName.test(m)).sort()).toEqual([
       'dungeon_finder_proposal_popup.ts',
+      'hud/battleground/battleground_proposal_popup.ts',
       'meters.ts',
       'mount_race_controls.ts',
       'mount_race_strip.ts',

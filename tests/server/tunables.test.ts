@@ -783,6 +783,17 @@ describe('no consolidated tunable literal is duplicated at a call site', () => {
     expect(bodyOf(read('server/deeds_db.ts'), 'export async function deedRarityCounts')).toContain(
       'runWithStatementTimeout(DB_HEAVY_STATEMENT_TIMEOUT_MS',
     );
+    // The reliquary aggregate detoasts every eligible character's state blob
+    // across THREE statements, and statement_timeout is per statement: under
+    // the 60 s heavy allowance one refresh could hold a pooled client for
+    // minutes, so the module carries its OWN deliberately lower bound (the
+    // GUILD_BANK_LOG_TIMEOUT_MS lowering precedent), pinned here with its
+    // literal so a quiet raise back to the heavy tier reds.
+    const reliquarySrc = read('server/reliquary_rarity_db.ts');
+    expect(reliquarySrc).toContain('export const RELIQUARY_RARITY_STATEMENT_TIMEOUT_MS = 10_000');
+    expect(bodyOf(reliquarySrc, 'export async function reliquaryRarityCounts')).toContain(
+      'runWithStatementTimeout(RELIQUARY_RARITY_STATEMENT_TIMEOUT_MS',
+    );
     // The on-demand admin reads carry the wrapper in the body that owns their
     // heaviest scan: sessionsByDay and accountDetail wrap directly; clientPerfSummary
     // runs its whole roll-up as ONE GROUPING SETS statement inside its own wrapper
@@ -869,9 +880,10 @@ describe('no consolidated tunable literal is duplicated at a call site', () => {
   it('the retention floor stays strictly above the admin activity window', () => {
     // The fold must never delete a session an admin activity chart still
     // counts. Extract both literals from source so a widened admin window
-    // (server/admin.ts) that overtakes the floor reddens this pin.
-    const adminModuleSrc = read('server/admin.ts');
-    const windowMatch = adminModuleSrc.match(/const ACTIVITY_WINDOW_DAYS = (\d+);/);
+    // (server/admin_activity_cache.ts, the shared TTL memo behind the four
+    // admin.ts activity reads) that overtakes the floor reddens this pin.
+    const adminActivityCacheSrc = read('server/admin_activity_cache.ts');
+    const windowMatch = adminActivityCacheSrc.match(/export const ACTIVITY_WINDOW_DAYS = (\d+);/);
     const floorMatch = retentionSrc.match(
       /export const PLAY_SESSION_RETENTION_FLOOR_DAYS = (\d+);/,
     );

@@ -283,6 +283,11 @@ export const BOOL_SETTINGS = {
   // Purely a local display preference: the badge is still earned and broadcast
   // either way, this only controls whether THIS client renders it.
   showDevBadges: { def: true },
+  // on by default: reveal the lifetime "Time Played" value on the character
+  // sheet. The sheet's eye button flips this per device (screenshot / stream
+  // privacy); the total keeps accruing either way, this only controls whether
+  // THIS client displays it.
+  showPlaytime: { def: true },
   // on by default: render your OWN overhead nameplate (name, level, guild, hp,
   // $WOC holder tier, dev badge, linked-Discord PFP) exactly as other players see
   // it, so Discord linking and other flair changes have immediate visual feedback.
@@ -334,6 +339,10 @@ export const BOOL_SETTINGS = {
   // tracker is collapsed to just its header. Toggled by clicking the tracker
   // header (the quest-tracker convention); kept here so the choice persists.
   deedTrackerCollapsed: { def: false },
+  // off by default (expanded): when on, the on-screen Reliquary tracker is
+  // collapsed to just its header. Toggled by clicking the tracker header (the
+  // quest-tracker convention); kept here so the choice persists.
+  reliquaryTrackerCollapsed: { def: false },
   // off by default: append an "Item Level N" (plus power score) line to every item
   // tooltip. Purely a display preference read live by the HUD; off keeps the
   // classic stat-only tooltip. See src/sim/item_level.ts for the derivation.

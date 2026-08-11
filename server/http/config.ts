@@ -132,6 +132,20 @@ export interface Config {
   readonly emailChangeRequestRetentionDays: number;
   // How many days of email_log rows (the outbound-email audit trail) to keep.
   readonly emailLogRetentionDays: number;
+  // How many days of RESOLVED player_reports rows (status 'ignored' or
+  // 'actioned') to keep; an OPEN report is never pruned regardless of age,
+  // since moderationQueue and moderationReportsForAccount only ever surface
+  // status = 'open' rows. 0 keeps resolved reports forever.
+  readonly playerReportRetentionDays: number;
+  // How many days of bug_reports rows to keep. Each row can carry a
+  // screenshot up to ~900 KB, so this table is the fastest-growing of the
+  // report tables. 0 keeps them forever.
+  readonly bugReportRetentionDays: number;
+  // How many days of the chat_violations hard-word incident log to keep. Its
+  // only reader (chatModerationForAccount) is already LIMIT-bounded per
+  // account, so pruning the oldest rows never invalidates a page it can still
+  // return. 0 keeps them forever.
+  readonly chatViolationRetentionDays: number;
   // The two sweep knobs follow the maxPlayersPerRealm trimmed-read contract
   // instead, because for them a whitespace-derived 0 is fail-DANGEROUS: hour 0
   // moves the sweep to 00:00 UTC, next to the nightly 03:15 UTC pg_dump window
@@ -189,6 +203,9 @@ const DEFAULT_PLAYER_ACTIVITY_RETENTION_DAYS = 400;
 const DEFAULT_PASSWORD_RESET_REQUEST_RETENTION_DAYS = 30;
 const DEFAULT_EMAIL_CHANGE_REQUEST_RETENTION_DAYS = 30;
 const DEFAULT_EMAIL_LOG_RETENTION_DAYS = 90;
+const DEFAULT_PLAYER_REPORT_RETENTION_DAYS = 180;
+const DEFAULT_BUG_REPORT_RETENTION_DAYS = 90;
+const DEFAULT_CHAT_VIOLATION_RETENTION_DAYS = 90;
 // PROVISIONAL: two hours after the nightly 03:15 UTC pg_dump window, pending real
 // traffic-curve evidence of the quietest hour; revisit when that evidence lands.
 const DEFAULT_RETENTION_SWEEP_UTC_HOUR = 5;
@@ -392,6 +409,18 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
       DEFAULT_EMAIL_CHANGE_REQUEST_RETENTION_DAYS,
     ),
     emailLogRetentionDays: numberOr(env.EMAIL_LOG_RETENTION_DAYS, DEFAULT_EMAIL_LOG_RETENTION_DAYS),
+    playerReportRetentionDays: numberOr(
+      env.PLAYER_REPORT_RETENTION_DAYS,
+      DEFAULT_PLAYER_REPORT_RETENTION_DAYS,
+    ),
+    bugReportRetentionDays: numberOr(
+      env.BUG_REPORT_RETENTION_DAYS,
+      DEFAULT_BUG_REPORT_RETENTION_DAYS,
+    ),
+    chatViolationRetentionDays: numberOr(
+      env.CHAT_VIOLATION_RETENTION_DAYS,
+      DEFAULT_CHAT_VIOLATION_RETENTION_DAYS,
+    ),
     // An hour outside 0..23 is garbage, not a preference; fall back like numberOr does.
     retentionSweepUtcHour:
       Number.isInteger(sweepHourRaw) && sweepHourRaw >= 0 && sweepHourRaw <= 23

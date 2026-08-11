@@ -143,15 +143,23 @@ describe('gfx override application', () => {
       ]),
     );
 
-    // Regenerated for the combined v21 profile controls and maxPooledObjects field. The staged
-    // vista and water tiers plus the bounded ground-object pool move every derived profile byte.
+    // Regenerated for the GfxSettings.nativeIosMemoryProfile -> iosMemoryProfile rename (the
+    // field now covers every iOS WebKit host, not just the packaged native app; see gfx.ts).
+    // Only the serialized KEY NAME moves for these desktop-default cases (none of them pass an
+    // iOS platform hint, so the field's VALUE stays false throughout), but JSON.stringify bakes
+    // the key name into the byte pin same as any other field.
+    // Regenerated again for the C1 memory-ratchet fix: the desktop
+    // maxPooledCharacterVisuals arm moved from POSITIVE_INFINITY (which
+    // JSON.stringify serializes as null) to the bounded 128 (see gfx.ts and
+    // tests/character_visual_pool.test.ts), so every desktop-default profile's
+    // serialized bytes moved by exactly that one value.
     expect(hashes).toEqual({
-      low: '4987a6b9a467580e2cb92a69c480991393c2c225ea15c34163d32c2ea1b79421',
-      medium: '631057f9ab877b911d9dc8871ce4618cdbe7e41834e138cdf8fca2ec65605c1a',
-      high: '8bae7a847914010b9c2628b83b71db75071473e4a0454fccc7f5995d99fb5c8c',
-      ultra: '6e4125654ebe9e92439a87a0025e8c2980261381f7519ed4e4151441f709663f',
-      insane: '9b8c9748c3c859e5f205ae1158ac78ed946cc334c0a430220805f35a99a49011',
-      advanced: 'c593310aac361378b53d43809c53c7c1f5f9947b811eea19e5ff0aab456e75e4',
+      low: '2b50e2f6a64cf6bc0540aea1138ba729db5ba29cd9e1ce7ae3630f9bb826f9bc',
+      medium: 'e38687c8392fe46ee6941e26374e11473f7208732e9aa251dde7239faa74504e',
+      high: '02a87653c70f90faeeeb22e918cd2bb79ad4fdd14b8115c6745a8e4f575f4547',
+      ultra: 'c7f51f9c5e62bb013db47cf42ad98d904b8f5a675aa072b7b2884f1903017cd2',
+      insane: '393167d184c3029be560b9601bc50a1d103fc2221204d85dae3c79be9dbdc3da',
+      advanced: 'e99d3a399f2a18903f9f31c80320f99e5b46f35af3e84f21a6220c02ca3475b8',
     });
   });
 

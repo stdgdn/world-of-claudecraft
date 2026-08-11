@@ -602,6 +602,8 @@ describe('ensureSchema wires every schema module at boot', () => {
       'guilds_realm_lower_name_prefix',
       'guilds_realm_created_id',
       'bank_ledger_container_recent',
+      'player_reports_retention_created',
+      'chat_violations_retention_created',
     ]);
     const guildPrefix = CONCURRENT_INDEX_MIGRATIONS.find(
       (m) => m.name === 'guilds_realm_lower_name_prefix',
@@ -635,6 +637,38 @@ describe('ensureSchema wires every schema module at boot', () => {
     expect(bankLedgerContainer?.checkSql).toContain("to_regclass('bank_ledger_container_recent')");
     expect(bankLedgerContainer?.dropSql).toBe(
       'DROP INDEX CONCURRENTLY IF EXISTS bank_ledger_container_recent',
+    );
+    // player_reports retention prune (prunePlayerReportsBatch): account-agnostic
+    // age scan, so the index leads with created_at rather than either existing
+    // account column, and is partial on the resolved-report predicate the
+    // prune actually filters (an open report is never pruned).
+    const playerReportsRetention = CONCURRENT_INDEX_MIGRATIONS.find(
+      (m) => m.name === 'player_reports_retention_created',
+    );
+    expect(playerReportsRetention?.createSql).toContain(
+      'ON player_reports(created_at ASC, id ASC)',
+    );
+    expect(playerReportsRetention?.createSql).toContain("WHERE status <> 'open'");
+    expect(playerReportsRetention?.checkSql).toContain(
+      "to_regclass('player_reports_retention_created')",
+    );
+    expect(playerReportsRetention?.dropSql).toBe(
+      'DROP INDEX CONCURRENTLY IF EXISTS player_reports_retention_created',
+    );
+    // chat_violations retention prune (pruneChatViolationsBatch): same
+    // account-agnostic age scan shape, not partial (no status column excludes
+    // rows here).
+    const chatViolationsRetention = CONCURRENT_INDEX_MIGRATIONS.find(
+      (m) => m.name === 'chat_violations_retention_created',
+    );
+    expect(chatViolationsRetention?.createSql).toContain(
+      'ON chat_violations(created_at ASC, id ASC)',
+    );
+    expect(chatViolationsRetention?.checkSql).toContain(
+      "to_regclass('chat_violations_retention_created')",
+    );
+    expect(chatViolationsRetention?.dropSql).toBe(
+      'DROP INDEX CONCURRENTLY IF EXISTS chat_violations_retention_created',
     );
   });
 

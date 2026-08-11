@@ -12,6 +12,7 @@ import {
   strongerQuestMarker,
 } from '../sim/quests/quest_marker_kind';
 import { type Entity, GATHER_CAST_ID } from '../sim/types';
+import { deedBorderSlug } from '../ui/deed_border_view';
 import { deedTitleText } from '../ui/deed_i18n';
 import { devTierBadgeDataUrl, devTierByIndex, devTierNameOutlineColor } from '../ui/dev_tier';
 import { discordRoleTagLabel } from '../ui/discord_role_tag';
@@ -19,6 +20,7 @@ import { tEntity } from '../ui/entity_i18n';
 import { holderTierBadgeDataUrl, holderTierByIndex } from '../ui/holder_tier';
 import { formatNumber, getI18nRevision, t } from '../ui/i18n';
 import { raidMarkerDataUrl } from '../ui/icons';
+import { localizeSimAuraName } from '../ui/sim_i18n';
 import { type IWorld, OVERHEAD_EMOTES } from '../world_api';
 
 import { castBarState } from './cast_bar';
@@ -302,7 +304,9 @@ export class NameplatePainter {
     state.level = '';
     state.levelColor = '#fff';
     state.guild = '';
+    state.guildLabel = '';
     state.title = '';
+    state.border = '';
     state.marker = '';
     state.markerTone = 'none';
     state.hpVisible = false;
@@ -352,8 +356,14 @@ export class NameplatePainter {
       state.name = entity.afk ? `<${t('hudChrome.nameplate.afkTag')}> ${baseName}` : baseName;
       state.nameColor = roleColor ?? '#7fb8ff';
       state.guild = entity.guild;
+      // Build the drawn `<guild>` wrapper here, not in the per-frame drawBase:
+      // resolveContent is guild's only writer and runs strictly less often (the
+      // init / fullPass / urgent / languageChanged gate), so the label can
+      // never diverge from the guild it wraps.
+      if (entity.guild) state.guildLabel = `<${entity.guild}>`;
       state.hpVisible = !entity.dead;
       state.title = entity.title ? deedTitleText(entity.title) : '';
+      state.border = deedBorderSlug(entity.border);
       state.aiLabel = entity.aiAccount === true ? t('hudChrome.playerMenu.aiTag') : '';
       state.devOutline = showDevBadges ? devTierNameOutlineColor(entity.devTier ?? 0) : null;
       for (const aura of entity.auras) {
@@ -420,7 +430,10 @@ export class NameplatePainter {
     const elite = !!template?.elite;
     const boss = !!template?.boss;
     state.friendlyPet = isFriendlyPet(entity, this.world.entities, this.isHostilePlayer);
-    const mobName = entity.ownerId !== null ? entity.name : mobDisplayName(entity.templateId);
+    const mobName =
+      entity.ownerId !== null
+        ? (localizeSimAuraName(entity.name) ?? entity.name)
+        : mobDisplayName(entity.templateId);
     state.name = entity.dead ? t('worldContent.corpseName', { name: mobName }) : mobName;
     state.nameColor = '#fff';
     state.level = entity.dead
