@@ -1,4 +1,19 @@
-// Typed game-server client for the external CLAUDIUM economy service.
+// ─── Local Claudium (no external service required) ───────────────────────────
+import {
+  getClaudiumBalance,
+  adjustClaudiumBalance,
+  grantAccountWeaponSkins,
+  type AccountCosmetics,
+} from './db';
+
+/**
+ * When true, Claudium runs entirely from the local DB without any external
+ * economy service. Balance, spend, and store all work offline.
+ * Always true in this deployment (WOC_ECONOMY_SERVICE_URL is not configured).
+ */
+export const LOCAL_CLAUDIUM_ENABLED = true;
+
+// ─── Typed game-server client for the external CLAUDIUM economy service.
 //
 // CLAUDIUM is a server-authoritative soft currency: ALL peg/price/balance logic
 // and verification live in the economy service (a separate repo). The game NEVER
@@ -15,6 +30,7 @@
 // The functions mirror the service SDK v1 surface; they do NOT recompute any
 // value, they only pass through what the service returns.
 
+import { WEAPON_SKINS } from '../src/sim/content/weapon_skins';
 import { DESKTOP_WALLET_HANDOFF_TTL_MS, desktopWalletHandoffs } from './desktop_wallet_handoff';
 
 const SERVICE_TIMEOUT_MS = 5000;
@@ -255,8 +271,16 @@ export async function claudiumStripeWebhook(
   }
 }
 
-/** GET balance/:accountId. Balance null when the service is off. */
+/**
+ * GET balance/:accountId.
+ * Uses local DB when LOCAL_CLAUDIUM_ENABLED; otherwise falls back to the
+ * external economy service (returns null when the service is off).
+ */
 export async function claudiumBalance(accountId: number): Promise<ClaudiumBalanceResult> {
+  if (LOCAL_CLAUDIUM_ENABLED) {
+    const balance = await getClaudiumBalance(accountId);
+    return { available: true, balance };
+  }
   const data = await callService<{ balance: number }>({
     method: 'GET',
     path: `balance/${encodeURIComponent(String(accountId))}`,
@@ -576,7 +600,11 @@ export async function claudiumNativeConfirm(input: {
   };
 }
 
-/** POST spend. granted:false when the service is off. */
+/**
+ * POST spend. Local version when LOCAL_CLAUDIUM_ENABLED:
+ * deducts balance, grants the weapon skin, returns new balance.
+ * Remote version (LOCAL_CLAUDIUM_ENABLED=false) talks to the external service.
+ */
 export async function claudiumSpend(input: {
   accountId: number;
   itemId: string;
@@ -584,6 +612,26 @@ export async function claudiumSpend(input: {
   expectedCostClaudium: number;
   idempotencyKey: string;
 }): Promise<ClaudiumSpendResult> {
+  if (LOCAL_CLAUDIUM_ENABLED) {
+    // 1. Idempotency guard: skip if the account already owns this skin.
+    const existing = await grantAccountWeaponSkins(input.accountId, []);
+    if (existing.weaponSkinIds.includes(input.itemId)) {
+      const balance = await getClaudiumBalance(input.accountId);
+      return { granted: false, balance, costClaudium: input.expectedCostClaudium, reason: 'already_granted' };
+    }
+    // 2. Check balance.
+    const balance = await getClaudiumBalance(input.accountId);
+    if (balance < input.expectedCostClaudium) {
+      return { granted: false, balance, costClaudium: input.expectedCostClaudium, reason: 'insufficient_balance' };
+    }
+    // 3. Deduct and grant.
+    const newBalance = await adjustClaudiumBalance(input.accountId, -input.expectedCostClaudium);
+    if (input.kind === 'skin') {
+      await grantAccountWeaponSkins(input.accountId, [input.itemId]);
+    }
+    return { granted: true, balance: newBalance, costClaudium: input.expectedCostClaudium, reason: null };
+  }
+  // ── External economy-service path (unchanged) ──────────────────────────────
   const data = await callService<{
     granted: boolean;
     balance: number;
@@ -619,7 +667,40 @@ export async function claudiumHistory(accountId: number): Promise<ClaudiumHistor
 }
 
 /** GET store. The cosmetic catalog, priced in Claudium by the service. Empty when off. */
+/**
+ * GET store/:accountId. Local version returns all weapon skins with fixed prices
+ * and ownership resolved from account_weapon_cosmetics.
+ */
 export async function claudiumStore(accountId: number): Promise<ClaudiumStoreResult> {
+  if (LOCAL_CLAUDIUM_ENABLED) {
+    const cosmetics = await grantAccountWeaponSkins(accountId, []);
+    const owned = new Set(cosmetics.weaponSkinIds);
+    // Fixed local price table (Claudium). Change values here to adjust shop pricing.
+    const PRICE_MAP: Record<string, number> = {
+      // Guildmark (Uncommon)
+      guildmark_arming_sword: 100, brasscap_axe: 100, tempered_flanged_mace: 100,
+      guildmark_dirk: 100, brasscrown_staff: 100, lacquered_wand: 100, fletcher_s_guild_bow: 100,
+      // Emberwrought (Rare)
+      cinderbrand_sword: 300, emberbite_axe: 300, smoulderfall_mace: 300,
+      ashspark_dagger: 300, forgeheart_staff: 300, emberwrought_wand: 300, cinderlatch_crossbow: 300,
+      // Hoarfrost (Epic)
+      ice_fang_sword: 800, glaciersplit_axe: 800, rimecrusher_mace: 800,
+      frostbite_dagger: 800, hoarfrost_vigil_staff: 800, everwinter_wand: 800, winterbite: 800,
+      // Fallen Star (Legendary)
+      solheim_sword: 2000, skyrender_axe: 2000, starfall_mace: 2000,
+      astravyr_dagger: 2000, cosmarch_staff: 2000, emberwish_wand: 2000,
+      encore_bow: 2000, meteorlatch_crossbow: 2000,
+    };
+    const items: ClaudiumStoreItem[] = Object.values(WEAPON_SKINS).map((skin) => ({
+      itemId: skin.id,
+      name: skin.id, // i18n key resolved client-side from armory.ts
+      kind: 'skin' as const,
+      costClaudium: PRICE_MAP[skin.id] ?? 500,
+      owned: owned.has(skin.id),
+    }));
+    return { available: true, items };
+  }
+  // ── External economy-service path (unchanged) ──────────────────────────────
   const data = await callService<ClaudiumStoreItem[]>({
     method: 'GET',
     path: `store/${encodeURIComponent(String(accountId))}`,

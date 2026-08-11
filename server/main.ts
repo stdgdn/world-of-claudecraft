@@ -107,6 +107,7 @@ import {
   handleClaudiumApi,
   handleClaudiumStripeWebhook,
 } from './claudium';
+import { handlePayCreate, handlePayNotify, handlePayReturn } from './pay_routes';
 import { configureCommunityTestAccounts } from './community_test_accounts';
 import {
   bustDailyRewardBoardCache,
@@ -2520,6 +2521,19 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse): P
       const accountId = await bearerActiveAccount(req, res);
       if (accountId === null) return;
       return handleClaudiumApi(req, res, accountId);
+    }
+    // Third-party payment — notify and return are public (provider calls them).
+    if (req.method === 'POST' && url === '/api/pay/notify') {
+      return handlePayNotify(req, res);
+    }
+    if (req.method === 'GET' && url === '/api/pay/return') {
+      return handlePayReturn(req, res);
+    }
+    // Authenticated: create a payment order.
+    if (req.method === 'POST' && url === '/api/pay/create') {
+      const accountId = await bearerActiveAccount(req, res);
+      if (accountId === null) return;
+      return handlePayCreate(req, res, accountId);
     }
     // Shareable player card: publish (PNG body) + referral stats for the card.
     if (req.method === 'POST' && url === '/api/card') {

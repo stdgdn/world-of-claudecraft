@@ -51,6 +51,7 @@ import {
   runMarketBackfill,
 } from './market_backfill';
 import { OAUTH_SCHEMA } from './oauth_db';
+import { PAY_ORDERS_SCHEMA } from './pay_orders_schema';
 import { PLAY_SESSION_RETENTION_SCHEMA } from './play_session_retention_db';
 import {
   closeOrphanPlayerSessions,
@@ -446,6 +447,12 @@ ALTER TABLE accounts ADD COLUMN IF NOT EXISTS is_streamer BOOLEAN NOT NULL DEFAU
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS streamer_links JSONB NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMPTZ;
+-- Claudium local balance: server-authoritative integer balance for the cosmetic
+-- armory. This replaces the external economy-service dependency so the armory
+-- works fully offline. The service no longer owns balance; we do. Zero = no spend.
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS claudium_balance BIGINT NOT NULL DEFAULT 0 CHECK (claudium_balance >= 0);
+-- Set a starting Claudium balance for existing accounts (std).
+UPDATE accounts SET claudium_balance = 10000 WHERE claudium_balance = 0;
 -- Whether the account has a password the OWNER set (and therefore can log in with
 -- via username + password). Defaults TRUE so every existing account keeps its
 -- usable password. Discord-provisioned accounts are created with FALSE: they have
@@ -1254,6 +1261,7 @@ export async function ensureSchema(): Promise<void> {
     // one row per (policy, key)) for the multi-realm deployment. Applied
     // unconditionally (idempotent), like the Discord/GitHub tables. See
     // server/ratelimit_db.ts.
+    await client.query(PAY_ORDERS_SCHEMA);
     await client.query(RATELIMIT_SCHEMA);
     // Fail-fast at boot if rate_limits did not materialize: the tier-2 limiter
     // depends on it, and a defined-but-unwired schema shipped once before
@@ -1621,6 +1629,63 @@ export async function grantAccountWeaponSkins(
     [accountId, skinIds.filter((id) => id)],
   );
   return normalizeAccountCosmeticsRow(res.rows[0]);
+}
+
+// ─── Claudium local balance (offline armory) ──────────────────────────────────
+
+/** Read the current Claudium balance for an account. Defaults 0 for new accounts. */
+export async function getClaudiumBalance(accountId: number): Promise<number> {
+  const res = await pool.query(
+    'SELECT claudium_balance FROM accounts WHERE id = $1',
+    [accountId],
+  );
+  return res.rows[0]?.claudium_balance ?? 0;
+}
+
+/**
+ * Top up or drain the Claudium balance. Returns the new balance.
+ * Use a negative delta to spend; the guard should be applied by the caller.
+ * Fails silently (returns current balance) if the account does not exist.
+ */
+export async function adjustClaudiumBalance(
+  accountId: number,
+  delta: number,
+): Promise<number> {
+  const res = await pool.query(
+    `UPDATE accounts
+       SET claudium_balance = GREATEST(0, claudium_balance + $2)
+     WHERE id = $1
+     RETURNING claudium_balance`,
+    [accountId, delta],
+  );
+  return res.rows[0]?.claudium_balance ?? 0;
+}
+
+/**
+ * Admin grant: set the Claudium balance to an explicit value (or add to it).
+ * When onlyAdd is true the balance can only go up (no overwrite).
+ */
+export async function setClaudiumBalance(
+  accountId: number,
+  value: number,
+  onlyAdd = false,
+): Promise<number> {
+  if (value < 0) return getClaudiumBalance(accountId);
+  if (onlyAdd) {
+    const res = await pool.query(
+      `UPDATE accounts
+         SET claudium_balance = claudium_balance + $2
+       WHERE id = $1
+       RETURNING claudium_balance`,
+      [accountId, value],
+    );
+    return res.rows[0]?.claudium_balance ?? 0;
+  }
+  const res = await pool.query(
+    `UPDATE accounts SET claudium_balance = $2 WHERE id = $1 RETURNING claudium_balance`,
+    [accountId, value],
+  );
+  return res.rows[0]?.claudium_balance ?? 0;
 }
 
 /** Replace the applied-skin-per-weapon-type loadout in the paid-state row. */
