@@ -14,7 +14,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Gymnasium](https://img.shields.io/badge/Gymnasium-RL%20env-0C7BDC)](https://gymnasium.farama.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.36.0-blue)](package.json)
+[![Version](https://img.shields.io/badge/version-0.37.1-blue)](package.json)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.com/invite/worldofclaudecraft)
 
@@ -286,7 +286,7 @@ Press `G` to open the PvP window (Thornhollow Fields is its primary tab, beside 
 |---|---|
 | `W` / `S` | run / backpedal. `A`/`D` turn (strafe with right mouse held), `Q`/`E` strafe |
 | right-drag / left-drag | mouselook / orbit camera. Wheel zooms, `Space` jumps |
-| `Tab` | cycle nearest enemies. left-click to target, right-click to attack, loot, or talk |
+| `Tab` / `Shift+Tab` | cycle nearest enemies forward / backward. left-click to target, right-click to attack, loot, or talk |
 | `1`-`9`, `0`, `-`, `=` | action bar |
 | `F` | interact (loot a corpse, pick up an object, talk) |
 | `C` `P` `L` `M` `B` `N` `T` | character, spellbook, quest log, world map, bags, talents, crafting |

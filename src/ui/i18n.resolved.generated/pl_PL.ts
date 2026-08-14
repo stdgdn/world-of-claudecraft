@@ -801,6 +801,11 @@ export const pl_PL: EnTranslations = {
       "resetAction": "Resetuj",
       "note": "Przeciągnij pasek zakładek czatu, aby przesunąć okno, lub uchwyt w rogu, aby zmienić jego rozmiar. Reset przywraca domyślną pozycję i rozmiar."
     },
+    "chatQuota": {
+      "limitReached": "Osiągnięto limit czatu Ogólnego. Spróbuj ponownie za {seconds}.",
+      "pending": "Twoja poprzednia wiadomość na czacie Ogólnym wciąż się wysyła. Spróbuj ponownie za chwilę.",
+      "unavailable": "Czat Ogólny jest tymczasowo niedostępny. Spróbuj ponownie wkrótce."
+    },
     "swing": {
       "ready": "Zamach",
       "seconds": "{seconds}s"
@@ -892,6 +897,14 @@ export const pl_PL: EnTranslations = {
       "bodyWithVersion": "Dostępna jest wersja {version} World of ClaudeCraft. Zaktualizuj teraz, aby uzyskać najnowsze poprawki i ulepszenia.",
       "notNow": "Nie teraz",
       "update": "Aktualizuj"
+    },
+    "otaUpdate": {
+      "title": "Aktualizacja gry",
+      "downloading": "Pobieranie aktualizacji: {percent}",
+      "applying": "Aktualizacja pobrana. Gra zostanie uruchomiona ponownie, aby ją zastosować.",
+      "incompatible": "Do gry wymagana jest aktualizacja. Zostanie zastosowana zaraz po zakończeniu pobierania.",
+      "continueAnyway": "Kontynuuj bez aktualizacji",
+      "progressLabel": "Postęp pobierania aktualizacji"
     },
     "cameraPrompt": {
       "title": "Wybierz Kamerę",
@@ -994,6 +1007,7 @@ export const pl_PL: EnTranslations = {
       "emoteWheel": "Koło emotek",
       "targetFriendly": "Obierz najbliższego sojusznika",
       "targetFriendlyNext": "Przełączaj przyjazny cel",
+      "targetPrev": "Przełączaj cel wstecz",
       "discord": "Discord",
       "valecup": "Puchar Doliny",
       "bgFlag": "Akcja flagi pola bitwy",
@@ -2185,6 +2199,10 @@ export const pl_PL: EnTranslations = {
       "itemAriaBound": "{item}, ilość {count}, związana kopia",
       "itemAriaMasterwork": "{item}, ilość {count}, arcydzieło",
       "itemAriaQuest": "{item}, ilość {count}, przedmiot zadania",
+      "itemAriaLocked": "{item}, liczba {count}, zablokowane",
+      "itemLockedLine": "Zablokowane",
+      "lockItem": "Zablokuj przedmiot",
+      "unlockItem": "Odblokuj przedmiot",
       "filterGroupAria": "Filtruj torby według kategorii",
       "filterAll": "Wszystko",
       "filterWeapon": "Bronie",
@@ -3215,6 +3233,7 @@ export const pl_PL: EnTranslations = {
       "craftedToast": "Wykonane: {name}",
       "craftedToastQty": "Wykonane: {name} x{qty}",
       "insufficientMaterials": "Nie masz na to materiałów.",
+      "reagentLocked": "Odczynnik do tego jest zablokowany.",
       "unknownRecipe": "Ten przepis nie istnieje.",
       "comboRequirementUnmet": "Nie masz obu wymaganych rzemiosł na wymaganym poziomie dla tego przepisu.",
       "comboRequires": "Dostrojenie: {craftA} + {craftB}, poziom {tier}.",
@@ -3321,6 +3340,7 @@ export const pl_PL: EnTranslations = {
       "notHeld": "Nie posiadasz tego przedmiotu.",
       "notDisenchantable": "Nie możesz tego rozbroić.",
       "notSalvageable": "Nie możesz tego odzyskać.",
+      "salvageLocked": "Ten przedmiot jest zablokowany.",
       "disenchantBusy": "Jesteś zajęty.",
       "salvageBusy": "Jesteś zajęty.",
       "enchantBusy": "Jesteś zajęty.",
@@ -4167,6 +4187,7 @@ export const pl_PL: EnTranslations = {
       "dungeonFinder": "Wyszukiwarka lochów",
       "discord": "Discord",
       "abilities": "Używaj zdolności z paska akcji (rząd cyfr; drugi pasek znajduje się na klawiaturze numerycznej)",
+      "targetPrev": "Przełączaj cel wstecz",
       "targetFriendly": "Namierz najbliższy przyjazny cel",
       "cycleFriendly": "Przełączaj przyjazny cel",
       "targetAuras": "Wzmocnienia i osłabienia celu",
@@ -8896,6 +8917,9 @@ export const pl_PL: EnTranslations = {
       "filterPrimaryStatAll": "Dowolny główny atrybut",
       "filterRarity": "Rzadkość",
       "filterRarityAll": "Wszystkie rzadkości",
+      "filterSort": "Sortuj",
+      "sortName": "Nazwa (A-Z)",
+      "sortPriceAsc": "Cena: od najniższej do najwyższej",
       "weaponSword": "Miecze",
       "weaponDagger": "Sztylety",
       "weaponStaff": "Kostury",

@@ -801,6 +801,11 @@ export const es: EnTranslations = {
       "resetAction": "Restablecer",
       "note": "Arrastra la pestaña del chat para mover la ventana, o el tirador de la esquina para cambiar su tamaño. Restablecer la devuelve a su posición y tamaño predeterminados."
     },
+    "chatQuota": {
+      "limitReached": "Has alcanzado el límite del chat General. Inténtalo de nuevo en {seconds}.",
+      "pending": "Tu mensaje anterior del chat General todavía se está enviando. Inténtalo de nuevo en un momento.",
+      "unavailable": "El chat General no está disponible temporalmente. Inténtalo de nuevo pronto."
+    },
     "swing": {
       "ready": "Golpe",
       "seconds": "{seconds} s"
@@ -892,6 +897,14 @@ export const es: EnTranslations = {
       "bodyWithVersion": "La versión {version} de World of ClaudeCraft ya está disponible. Actualiza ahora para obtener las últimas correcciones y mejoras.",
       "notNow": "Ahora no",
       "update": "Actualizar"
+    },
+    "otaUpdate": {
+      "title": "Actualización del juego",
+      "downloading": "Descargando actualización: {percent}",
+      "applying": "Actualización descargada. Reiniciando el juego para aplicarla.",
+      "incompatible": "Se necesita una actualización para jugar. Se aplicará en cuanto termine la descarga.",
+      "continueAnyway": "Continuar sin actualizar",
+      "progressLabel": "Progreso de descarga de la actualización"
     },
     "cameraPrompt": {
       "title": "Elige tu camara",
@@ -994,6 +1007,7 @@ export const es: EnTranslations = {
       "emoteWheel": "Rueda de gestos",
       "targetFriendly": "Objetivo amistoso más cercano",
       "targetFriendlyNext": "Objetivo amistoso siguiente",
+      "targetPrev": "Objetivo anterior",
       "discord": "Discord",
       "valecup": "Copa del Valle",
       "bgFlag": "Acción de bandera de campo de batalla",
@@ -2185,6 +2199,10 @@ export const es: EnTranslations = {
       "itemAriaBound": "{item}, cantidad {count}, copia vinculada",
       "itemAriaMasterwork": "{item}, cantidad {count}, obra maestra",
       "itemAriaQuest": "{item}, cantidad {count}, objeto de misión",
+      "itemAriaLocked": "{item}, cantidad {count}, bloqueado",
+      "itemLockedLine": "Bloqueado",
+      "lockItem": "Bloquear objeto",
+      "unlockItem": "Desbloquear objeto",
       "filterGroupAria": "Filtrar bolsas por categoría",
       "filterAll": "Todos",
       "filterWeapon": "Armas",
@@ -3215,6 +3233,7 @@ export const es: EnTranslations = {
       "craftedToast": "Elaborado: {name}",
       "craftedToastQty": "Elaborado: {name} x{qty}",
       "insufficientMaterials": "No tienes los materiales para eso.",
+      "reagentLocked": "Un componente para eso está bloqueado.",
       "unknownRecipe": "Esa receta no existe.",
       "comboRequirementUnmet": "No tienes las dos profesiones requeridas al nivel necesario para esa receta.",
       "comboRequires": "Sintonización: {craftA} + {craftB}, nivel {tier}.",
@@ -3321,6 +3340,7 @@ export const es: EnTranslations = {
       "notHeld": "No tienes ese objeto.",
       "notDisenchantable": "No puedes desencatar eso.",
       "notSalvageable": "No puedes desguazar eso.",
+      "salvageLocked": "Ese objeto está bloqueado.",
       "disenchantBusy": "Estás ocupado.",
       "salvageBusy": "Estás ocupado.",
       "enchantBusy": "Estás ocupado.",
@@ -4167,6 +4187,7 @@ export const es: EnTranslations = {
       "dungeonFinder": "Buscador de Mazmorras",
       "discord": "Discord",
       "abilities": "Usar las habilidades de la barra de acción (la fila de números; una segunda barra está en el teclado numérico)",
+      "targetPrev": "Objetivo anterior",
       "targetFriendly": "Objetivo amistoso más cercano",
       "cycleFriendly": "Objetivo amistoso siguiente",
       "targetAuras": "Beneficios y perjuicios del objetivo",
@@ -8896,6 +8917,9 @@ export const es: EnTranslations = {
       "filterPrimaryStatAll": "Cualquier estadística principal",
       "filterRarity": "Rareza",
       "filterRarityAll": "Todas las rarezas",
+      "filterSort": "Ordenar",
+      "sortName": "Nombre (A-Z)",
+      "sortPriceAsc": "Precio: de menor a mayor",
       "weaponSword": "Espadas",
       "weaponDagger": "Dagas",
       "weaponStaff": "Bastones",
